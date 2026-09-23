@@ -18,7 +18,15 @@ The pair cannot be rotated. Telegram issues one per number and documents no rese
 
 ## The first login
 
-Signing in is interactive by definition: Telegram sends a code to the account, and an account with two-step verification also needs its password. Run the login once, by hand, against the same state directory the unit uses, and the session stays valid afterwards
+Signing in is interactive by definition: Telegram sends a code to the account, and an account with two-step verification also needs its password. It also has to write the session into the same state directory the service reads, which under `DynamicUser` sits inside `/var/lib/private` and is closed to everyone
+
+So the login runs as the service runs, through systemd, with a terminal attached. The module ships `tg-agent-login` for exactly that, and it needs root because it starts a transient unit:
+
+```bash
+sudo tg-agent-login
+```
+
+Once that has succeeded the session stays valid, and the service starts on its own. A service that finds no session exits 78 and the unit refuses to restart it, because a restart cannot supply a code that arrives on a phone
 
 The login creates a session that appears in the account's device list and sends a "new login" notice to every other device. Naming the device with `--device` is what makes that entry recognisable later, rather than an unlabelled client among the real ones
 

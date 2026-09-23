@@ -42,6 +42,11 @@ def build_parser():
         default="tg-agentd",
         help="the device name this session shows in the account's device list",
     )
+    parser.add_argument(
+        "--login",
+        action="store_true",
+        help="sign in interactively instead of serving, and exit",
+    )
     return parser
 
 
@@ -91,6 +96,15 @@ async def run(options):
         api_hash,
         device_model=options.device,
     )
+    if options.login:
+        # The session has to be written by the same identity that will read it, in the
+        # same state directory, so the login runs as this service rather than beside it
+        await telethon.start()
+        me = await telethon.get_me()
+        print(f"tg-agentd: signed in as {getattr(me, 'username', None) or me.id}")
+        await telethon.disconnect()
+        return
+
     account = Client(telethon)
     await account.start()
     if not await telethon.is_user_authorized():

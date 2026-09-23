@@ -109,6 +109,34 @@ in
   };
 
   config = mkIf cfg.enable {
+    # The login is interactive, and the session it writes has to land in the same state
+    # directory the service reads — which under DynamicUser is inside /var/lib/private,
+    # where no one can go. So the login runs as the service does, through systemd, with a
+    # terminal attached. Without this the isolation would also lock out the only legitimate
+    # way to sign in
+    environment.systemPackages = [
+      (pkgs.writeShellApplication {
+        name = "tg-agent-login";
+        runtimeInputs = [ pkgs.systemd ];
+        text = ''
+          if [ "$(id -u)" -ne 0 ]; then
+            echo "tg-agent-login: run this with sudo — it starts a transient unit" >&2
+            exit 1
+          fi
+          exec systemd-run --pty --wait --collect --quiet \
+            --unit=tg-agent-login \
+            --property=DynamicUser=yes \
+            --property=StateDirectory=tg-agent \
+            --property="LoadCredential=api_id:${cfg.apiIdFile}" \
+            --property="LoadCredential=api_hash:${cfg.apiHashFile}" \
+            ${lib.getExe cfg.package} \
+              --permissions ${cfg.permissionsDir} \
+              --device ${cfg.deviceName} \
+              --login
+        '';
+      })
+    ];
+
     systemd = {
       # systemd creates both directories, because the service runs as a user that exists
       # only while it runs, and a directory it created would carry a meaningless owner
