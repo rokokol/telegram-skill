@@ -175,6 +175,10 @@ in
             NoNewPrivileges = true;
             Restart = "on-failure";
             RestartSec = "10s";
+            # 78 is the service saying its session is not signed in. The login is
+            # interactive, so a restart cannot fix it, and without this the unit wakes
+            # every ten seconds for as long as the machine is up
+            RestartPreventExitStatus = "78";
           };
         };
 

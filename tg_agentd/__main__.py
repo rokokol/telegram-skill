@@ -1,5 +1,10 @@
 """Start the service: read the credentials, connect, and serve the socket."""
 
+# A session that is not signed in is a configuration fault, not a failure to retry: the
+# login is interactive, so restarting cannot fix it. The unit stops on this code instead
+# of waking every few seconds for as long as the machine is up
+EX_CONFIG = 78
+
 import argparse
 import asyncio
 import os
@@ -89,7 +94,12 @@ async def run(options):
     account = Client(telethon)
     await account.start()
     if not await telethon.is_user_authorized():
-        raise SystemExit("tg-agentd: the session is not signed in")
+        print(
+            "tg-agentd: the session is not signed in — run the login once by hand "
+            f"against {state}, as references/setup.md describes",
+            file=sys.stderr,
+        )
+        raise SystemExit(EX_CONFIG)
 
     store = permissions.Store(options.permissions)
     served = server.Server(handler.Handler(store, account))
