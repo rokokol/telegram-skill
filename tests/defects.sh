@@ -121,11 +121,11 @@ EOF
 defect 'permission/identifier' 'tg_agentd/permissions.py' \
   "$(
     cat <<'EOF'
-        if not IDENTIFIER.match(name):
-            raise BadIdentifier(f"{name!r} is not a Telegram identifier")
+    if not IDENTIFIER.match(name):
+        raise BadIdentifier(f"{name!r} is not a Telegram identifier")
 EOF
   )" \
-  '        pass' \
+  '    pass' \
   'a chat identifier holding a path reads a permission file from anywhere on the filesystem, so the agent chooses its own permissions'
 
 defect 'permission/wildcard-table' 'tg_agentd/verbs.py' \
