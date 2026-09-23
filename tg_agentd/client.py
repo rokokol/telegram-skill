@@ -9,6 +9,7 @@ action the permissions name, and each states what Telethon would otherwise assum
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.messages import (
     GetDialogFiltersRequest,
+    GetForumTopicsRequest,
     UpdateDialogFilterRequest,
 )
 
@@ -91,6 +92,24 @@ class Client:
         """
         answer = await self._telethon(GetDialogFiltersRequest())
         return list(getattr(answer, "filters", answer) or [])
+
+    async def topics(self, chat_id, limit=100):
+        """The topics of a forum.
+
+        A forum keeps every message inside a topic, so reading one without naming a topic
+        returns all of them interleaved. These live under `messages` rather than
+        `channels`, which is where the name suggests they would be.
+        """
+        answer = await self._telethon(
+            GetForumTopicsRequest(
+                peer=chat_id,
+                offset_date=None,
+                offset_id=0,
+                offset_topic=0,
+                limit=limit,
+            )
+        )
+        return list(getattr(answer, "topics", answer) or [])
 
     async def update_folder(self, folder_id, folder):
         """Replace a folder, or delete it when given nothing to put there."""

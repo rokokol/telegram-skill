@@ -192,3 +192,21 @@ EOF
 EOF
   )" \
   'a forward permission on one chat writes into any other chat, so content leaves a granted chat for one nobody granted'
+
+defect 'folder/pinned' 'tg_agentd/folders.py' \
+  "$(
+    cat <<'EOF'
+    for field in ("pinned_peers", "include_peers"):
+EOF
+  )" \
+  '    for field in ("include_peers",):' \
+  'a chat pinned inside a folder is not counted as a member, so the grant on that folder never reaches the chats the user pinned there'
+
+defect 'folder/marked-id' 'tg_agentd/folders.py' \
+  "$(
+    cat <<'EOF'
+        return -(CHANNEL_MARK + value)
+EOF
+  )" \
+  '        return value' \
+  'a channel listed in a folder is addressed by its raw identifier, which names a user that does not exist, so no grant through that folder reaches a channel'

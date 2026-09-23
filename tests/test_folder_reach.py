@@ -106,3 +106,12 @@ def test_the_folder_listing_leaves_out_the_one_with_no_identifier(ask):
     ask.fake.folders.append(FakeFolder(id=None, title="", include_peers=[]))
     listed = ask({"action": "folder-list"})["result"]["folders"]
     assert all(entry["id"] is not None for entry in listed)
+
+
+def test_a_pinned_chat_counts_as_a_member(ask, store):
+    # Telegram keeps a folder's pinned chats in a field of their own, and they are
+    # usually the ones the user cares about most
+    ask.fake.folders[0].pinned_peers = [111]
+    grant_folder(store, 5, "folder-read")
+    members = ask({"action": "folder-read", "folder": 5})["result"]["members"]
+    assert members == [111, 777, 888]

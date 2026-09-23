@@ -42,6 +42,12 @@ def build_parser():
     parser.add_argument("--add", type=int, nargs="+", help="chats to add, for folder-edit")
     parser.add_argument("--remove", type=int, nargs="+", help="chats to remove, for folder-edit")
     parser.add_argument("--limit", type=int, help="how many messages to read")
+    parser.add_argument("--topic", type=int, help="read one topic of a forum")
+    parser.add_argument(
+        "--since",
+        type=int,
+        help="only messages newer than this one, which is how a watcher asks for what it has not seen",
+    )
     parser.add_argument(
         "--search",
         help="ask the server for messages holding this text, instead of reading history",
@@ -69,6 +75,8 @@ def request_from(options):
         "remove": options.remove,
         "limit": options.limit,
         "search": options.search,
+        "topic": options.topic,
+        "since": options.since,
     }
     return {key: value for key, value in named.items() if value is not None}
 

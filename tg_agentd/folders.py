@@ -28,22 +28,43 @@ def title_of(folder):
 def members_of(folder):
     """The chat identifiers a folder holds, as plain integers.
 
-    Telegram stores these as input peers. The identifier is the part a permission file
-    can name, so it is the part this service works in.
+    Telegram keeps a folder's pinned chats in a field of their own, so reading only the
+    included ones leaves out every chat the user pinned there — which is usually the ones
+    they care about most.
+
+    The identifiers arrive as input peers. The number is the part a permission file can
+    name, so it is the part this service works in.
     """
     members = []
-    for peer in getattr(folder, "include_peers", []) or []:
-        members.append(_identifier(peer))
-    return sorted(m for m in members if m is not None)
+    for field in ("pinned_peers", "include_peers"):
+        for peer in getattr(folder, field, []) or []:
+            members.append(_identifier(peer))
+    return sorted({m for m in members if m is not None})
+
+
+# A channel's marked identifier is its own with this added and the sign flipped, which is
+# what the -100 prefix means when written out
+CHANNEL_MARK = 1000000000000
 
 
 def _identifier(peer):
+    """A peer as the number the rest of Telegram addresses it by.
+
+    A folder stores the raw identifier of each kind, while a dialog, a permission file and
+    every request use the marked one. Reading a folder without marking makes a channel
+    address a user that does not exist.
+    """
     if isinstance(peer, int):
         return peer
-    for attribute in ("user_id", "chat_id", "channel_id"):
-        value = getattr(peer, attribute, None)
-        if value is not None:
-            return value
+    value = getattr(peer, "user_id", None)
+    if value is not None:
+        return value
+    value = getattr(peer, "chat_id", None)
+    if value is not None:
+        return -value
+    value = getattr(peer, "channel_id", None)
+    if value is not None:
+        return -(CHANNEL_MARK + value)
     return None
 
 

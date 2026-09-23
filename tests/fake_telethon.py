@@ -31,17 +31,28 @@ class FakeFolder:
     id: int
     title: str
     include_peers: list = field(default_factory=list)
+    pinned_peers: list = field(default_factory=list)
     exclude_read: bool = False
+
+
+@dataclass
+class FakeTopic:
+    """Stands in for a ForumTopic."""
+
+    id: int
+    title: str
+    unread_count: int = 0
 
 
 class FakeClient:
     """Records calls. Every method here mirrors one the service is allowed to use."""
 
-    def __init__(self, messages=None, dialogs=None, folders=None):
+    def __init__(self, messages=None, dialogs=None, folders=None, topics=None):
         self.calls = []
         self.messages = messages or {}
         self.dialogs = dialogs or []
         self.folders = folders or []
+        self.topics = topics or []
         self.connected = False
 
     def _record(self, name, **kwargs):
@@ -75,6 +86,8 @@ class FakeClient:
         self._record("raw", request=name, offline=getattr(request, "offline", None))
         if name == "GetDialogFiltersRequest":
             return _Filters(list(self.folders))
+        if name == "GetForumTopicsRequest":
+            return _Topics(list(self.topics))
         if name == "UpdateDialogFilterRequest":
             self._record(
                 "raw_update_filter",
@@ -129,6 +142,13 @@ class _Filters:
     """What GetDialogFilters answers with: the folders, under a field of their own."""
 
     filters: list
+
+
+@dataclass
+class _Topics:
+    """What GetForumTopics answers with."""
+
+    topics: list
 
 
 @dataclass

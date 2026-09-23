@@ -12,6 +12,9 @@ permission file is an answer rather than a crash: the service serves other chats
 
 from . import folders, permissions, verbs
 
+# Actions that are not permissions of their own, and the permission each one takes
+REQUIRES = {"topics": "read"}
+
 
 class Handler:
     """Answers requests against one permission store and one account."""
@@ -64,16 +67,20 @@ class Handler:
         if "folder" in request:
             return await self._folder(request, action)
 
-        if action not in verbs.CHAT_ACTIONS:
+        # Listing a forum's topics is reading its shape, so read is what it takes. It is
+        # not a permission of its own: a grant nobody would withhold separately is a word
+        # to remember for nothing
+        needs = REQUIRES.get(action, action)
+        if needs not in verbs.CHAT_ACTIONS:
             return _refused(f"no action is called {action!r}")
 
         chat = permissions.as_identifier(request.get("chat"))
-        decision = self._store.chat_may(chat, action)
+        decision = self._store.chat_may(chat, needs)
         through = None
         if not decision.allowed:
             # A folder granting read reaches the chats inside it. Its own file is checked
             # first, so a chat the user decided on personally keeps that decision
-            through = await self._folder_covering(chat, action)
+            through = await self._folder_covering(chat, needs)
             if through is None:
                 return _refused(decision.reason, remedy=_remedy(chat, action))
 
@@ -129,10 +136,31 @@ class Handler:
 
     async def _perform(self, action, request):
         chat = permissions.as_identifier(request["chat"])
+        if action == "topics":
+            listed = await self._client.topics(chat)
+            return {
+                "topics": [
+                    {
+                        "id": getattr(topic, "id", None),
+                        "title": folders.title_of(topic),
+                        "unread": getattr(topic, "unread_count", 0),
+                    }
+                    for topic in listed
+                ]
+            }
         if action == "read":
             # A search term goes to the server, which answers with the matches alone.
             # Filtering here would mean reading a whole history to find one message
-            terms = {"search": request["search"]} if request.get("search") else {}
+            terms = {}
+            if request.get("search"):
+                terms["search"] = request["search"]
+            # A forum keeps its messages inside topics, and one topic is one conversation
+            if request.get("topic"):
+                terms["reply_to"] = request["topic"]
+            # Everything newer than a message already seen, which is how a watcher asks
+            # for what it has not read rather than for the last N
+            if request.get("since"):
+                terms["min_id"] = request["since"]
             messages = await self._client.history(
                 chat, limit=request.get("limit"), **terms
             )
