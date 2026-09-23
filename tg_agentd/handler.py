@@ -16,6 +16,10 @@ from . import folders, permissions, verbs
 REQUIRES = {"topics": "read"}
 
 
+class ChatIsNotAForum(ValueError):
+    """Topics were asked of a chat that keeps none."""
+
+
 class Handler:
     """Answers requests against one permission store and one account."""
 
@@ -33,6 +37,8 @@ class Handler:
             return _refused(str(unknown))
         except permissions.PermissionFileError as broken:
             return _refused(str(broken))
+        except ChatIsNotAForum as plain:
+            return _refused(str(plain))
         except Exception as unexpected:
             # Anything else has to come back as an answer too. Letting it close the
             # connection leaves the caller with an empty read and no way to tell a failure
@@ -137,7 +143,17 @@ class Handler:
     async def _perform(self, action, request):
         chat = permissions.as_identifier(request["chat"])
         if action == "topics":
-            listed = await self._client.topics(chat)
+            try:
+                listed = await self._client.topics(chat)
+            except Exception as refused:
+                # A chat that is simply not a forum is an ordinary answer rather than a
+                # fault, and the library's own error names a constructor nobody outside
+                # it has heard of
+                if "ChannelForumMissing" in str(refused):
+                    raise ChatIsNotAForum(
+                        f"chat {chat} is not a forum, so it has no topics"
+                    ) from None
+                raise
             return {
                 "topics": [
                     {

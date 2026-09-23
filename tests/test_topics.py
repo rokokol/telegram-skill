@@ -76,3 +76,17 @@ def test_a_search_inside_one_topic_stays_inside_it(ask):
     call = ask.fake.called("get_messages")[0]
     assert call["reply_to"] == 17
     assert call["search"] == "x"
+
+
+# A chat that is simply not a forum is an ordinary answer, not a fault. The library's own
+# error names a constructor nobody outside it has heard of
+def test_a_chat_that_is_no_forum_says_so_plainly(ask, store, monkeypatch):
+    async def not_a_forum(*args, **kwargs):
+        raise RuntimeError("ChannelForumMissingError:  (caused by GetForumTopicsRequest)")
+
+    monkeypatch.setattr(client_module.Client, "topics", not_a_forum)
+    (store.root / "chats" / "777.conf").write_text("allow: read\n")
+    answer = ask({"action": "topics", "chat": 777})
+    assert answer["ok"] is False
+    assert "not a forum" in answer["error"]
+    assert "ChannelForumMissing" not in answer["error"]
