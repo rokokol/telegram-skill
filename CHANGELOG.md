@@ -16,6 +16,9 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 - `tg.py permissions`, answering with every grant held and what each expands to, reaching no account and needing no grant. Without it the only way to learn a permission is to attempt an action and read the refusal
 - A defect list of thirteen entries, each breaking one guard and requiring the suite to notice, run on the default branch through the tests skill's harness
 - A NixOS module as `nixosModules.default`, carrying the unit the service depends on: `DynamicUser`, credentials read by systemd before the service drops its privileges, the session under `/var/lib/private`, a socket whose owner systemd sets, and a daily sweep of the outbox. It ships here because the isolation is the service's own property, not a detail each consumer reinvents
+- `tg-watch.py`, which follows one chat and prints each new message as a line. It asks from the last message it saw rather than for the last few, so nothing that arrived between two rounds is lost or repeated, and it reports both sides: a message sent from a phone is as much an event as one that arrived
+- Forums: `topics` lists a forum's topics, and `--topic` reads one of them on its own. Their methods live under `messages` rather than `channels`, which is why they looked unsupported
+- `--since` on a read, which is how a watcher asks for what it has not seen
 
 ### Security
 

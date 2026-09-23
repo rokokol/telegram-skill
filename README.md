@@ -66,6 +66,8 @@ you ──► agent ──► tg.py ──► unix socket ──► tg-agentd �
 
 The client holds no secret and makes no decision. It sends a request and prints the answer, so the standard library is all it needs. Everything that decides is behind the socket, where the agent cannot reach it
 
+`tg-watch.py` beside it follows a chat and prints each new message as a line — both sides, from the last one seen rather than the last few, so nothing between two rounds is lost or repeated
+
 Three properties are tests rather than promises, and each has a planted defect proving the suite would notice: no path that reads history marks it read, every connection sends an explicit offline status, and every deletion states whether it removes the message for everyone
 
 ## Permissions

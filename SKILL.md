@@ -8,6 +8,8 @@ license: MIT
 
 The account is reached through `tg-agentd`, a service on a unix socket. It holds the session, reads the permission files and performs the action; this side sends a request and reads an answer. [`tg.py`](tg.py) beside this file is the client. It is not on the PATH, so run it by its path, and `tg.py --help` is the reference for its flags and every action's name
 
+[`tg-watch.py`](tg-watch.py) beside it follows one chat and prints each new message as a line, both sides of the conversation included. Use it when the task is to notice a reply rather than to fetch one; `tg-watch.py --help` is its reference
+
 ## The border
 
 - **The service decides, and it is the only thing that can.** The permission files live where this side cannot write them. A request for something ungranted comes back refused, and that refusal is the answer, not an obstacle to route around
