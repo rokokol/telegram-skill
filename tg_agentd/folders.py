@@ -15,6 +15,16 @@ def fingerprint(members):
     return hashlib.sha256(joined.encode()).hexdigest()[:12]
 
 
+def title_of(folder):
+    """A folder's title as text.
+
+    Telegram wraps it in a container carrying formatting entities, so the object's own
+    string form is the container rather than the name a person reads.
+    """
+    title = getattr(folder, "title", "")
+    return str(getattr(title, "text", title) or "")
+
+
 def members_of(folder):
     """The chat identifiers a folder holds, as plain integers.
 

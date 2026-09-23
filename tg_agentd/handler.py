@@ -51,10 +51,11 @@ class Handler:
             listed = [
                 {
                     "id": getattr(folder, "id", None),
-                    "title": str(getattr(folder, "title", "")),
+                    "title": folders.title_of(folder),
                     "chats": len(folders.members_of(folder)),
                 }
                 for folder in await self._client.folders()
+                if getattr(folder, "id", None) is not None
             ]
             return _allowed(None, action, {"folders": listed})
 
@@ -68,8 +69,13 @@ class Handler:
 
         chat = permissions.as_identifier(request.get("chat"))
         decision = self._store.chat_may(chat, action)
+        through = None
         if not decision.allowed:
-            return _refused(decision.reason, remedy=_remedy(chat, action))
+            # A folder granting read reaches the chats inside it. Its own file is checked
+            # first, so a chat the user decided on personally keeps that decision
+            through = await self._folder_covering(chat, action)
+            if through is None:
+                return _refused(decision.reason, remedy=_remedy(chat, action))
 
         # A download has to land somewhere the user can reach. Inventing a path would put
         # the account's files wherever this process happens to be running
@@ -86,7 +92,40 @@ class Handler:
                 )
 
         result = await self._perform(action, request)
-        return _allowed(decision.by, action, result)
+        answer = _allowed(decision.by or through["by"], action, result)
+        if through is not None:
+            answer["through_folder"] = {
+                "id": through["id"],
+                "title": through["title"],
+                "chats": through["chats"],
+            }
+        return answer
+
+    async def _folder_covering(self, chat, action):
+        """A granted folder holding this chat, or None.
+
+        Only the actions a folder may grant are looked for. A folder never lends a write
+        action, whatever its own file says, because its membership moves without anyone
+        here being told.
+        """
+        if action not in verbs.FOLDER_CONTENT_ACTIONS:
+            return None
+        for folder in await self._client.folders():
+            folder_id = getattr(folder, "id", None)
+            if folder_id is None:
+                continue
+            members = folders.members_of(folder)
+            if chat not in members:
+                continue
+            decision = self._store.folder_may(folder_id, action)
+            if decision.allowed:
+                return {
+                    "by": decision.by,
+                    "id": folder_id,
+                    "title": folders.title_of(folder),
+                    "chats": len(members),
+                }
+        return None
 
     async def _perform(self, action, request):
         chat = permissions.as_identifier(request["chat"])
@@ -159,11 +198,19 @@ class Handler:
         if action == "folder-read":
             return {
                 "id": getattr(folder, "id", None),
-                "title": str(getattr(folder, "title", "")),
+                "title": folders.title_of(folder),
                 "members": members,
             }
         if action == "digest":
-            return {"chats": await self._digest(members)}
+            counted = await self._digest(members)
+            # A folder can hold a chat that has no dialog: a contact nobody ever wrote
+            # to, or one in the archive. Counting only what was found and saying nothing
+            # turns a partial summary into what reads like a complete one
+            return {
+                "chats": counted,
+                "counted": len(counted),
+                "members": len(members),
+            }
         if action == "read":
             return {"members": members}
         if action == "folder-edit":
