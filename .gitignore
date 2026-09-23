@@ -1,0 +1,8 @@
+*.bak
+user/
+result
+result-*
+__pycache__/
+*.pyc
+.pytest_cache/
+falsify.out/

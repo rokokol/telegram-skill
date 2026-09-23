@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tg-agentd"
+version = "0"
+description = "Serve a Telegram account over a unix socket under per-chat permissions"
+requires-python = ">=3.11"
+dependencies = ["telethon", "cryptg"]
+
+[project.scripts]
+tg-agentd = "tg_agentd.__main__:main"
+
+[tool.setuptools]
+packages = ["tg_agentd"]

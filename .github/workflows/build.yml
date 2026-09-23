@@ -1,0 +1,34 @@
+name: ci
+
+# Nothing here talks to a mirror, a :latest image or a live site, so it is a gate
+# rather than a detector and pull requests run the whole of it
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: the ref to check out, so a bot can verify a branch with this very workflow
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+# There is no macOS job. The service holds its secret in a systemd unit's namespace, and
+# the platform without systemd cannot run it at all
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: cachix/install-nix-action@v31
+      # The pin guard and the vendored copies are checked inside the gate, so the command
+      # run here and the one run locally are the same
+      - name: tests/check.sh (self-testing gate)
+        run: nix develop --no-write-lock-file -c ./tests/check.sh
