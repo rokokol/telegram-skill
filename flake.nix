@@ -4,7 +4,7 @@
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
       inherit (nixpkgs) lib;
       # systemd holds the secret, so there is no port to a system without it
@@ -18,6 +18,10 @@
       packages = forAllSystems (pkgs: {
         default = pkgs.callPackage ./nix/package.nix { };
       });
+
+      # The unit carries the isolation the service depends on, so it ships here rather
+      # than being written again by every consumer
+      nixosModules.default = import ./nix/module.nix { inherit self; };
 
       # The pinned toolbox for check.sh, locally and in CI — a linter looked up from a
       # registry at job time makes the run a test of someone else's mirror

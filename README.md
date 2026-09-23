@@ -8,6 +8,7 @@
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Telethon](https://img.shields.io/badge/Telethon-2CA5E0?style=flat&logo=telegram&logoColor=white)
 ![systemd](https://img.shields.io/badge/systemd-30D475?style=flat&logo=systemd&logoColor=white)
+![Nix](https://img.shields.io/badge/Nix-5277C3?style=flat&logo=nixos&logoColor=white)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![ci](https://github.com/rokokol/telegram-skill/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/telegram-skill/actions/workflows/build.yml)
 [![falsify](https://github.com/rokokol/telegram-skill/actions/workflows/falsify.yml/badge.svg)](https://github.com/rokokol/telegram-skill/actions/workflows/falsify.yml)
@@ -40,7 +41,18 @@ npx skills add -g rokokol/telegram-skill    # for you, everywhere
 npx skills add rokokol/telegram-skill       # for the project you are standing in
 ```
 
-The service half is a Nix package, so a system configuration can take this repository as a flake input and run `tg-agentd` under a unit of its own. `references/setup.md` says what that unit has to provide
+The service half comes with its own NixOS module, so a system configuration takes this repository as a flake input and turns it on:
+
+```nix
+services.tg-agent = {
+  enable = true;
+  apiIdFile = "/run/secrets/telegram-api-id";
+  apiHashFile = "/run/secrets/telegram-api-hash";
+  socketUser = "you";
+};
+```
+
+The module is where the isolation lives — `DynamicUser`, credentials read before the service drops its privileges, the session under `/var/lib/private` — so it ships here rather than being written again by everyone who runs it. `references/setup.md` says what it provides and why
 
 ## How it is arranged
 

@@ -15,6 +15,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 - An outbox for downloads, with a lifetime on each file. Both the subdirectory the agent names and the file name the sender chose are reduced to one safe path component, and a destination outside the outbox is refused rather than repaired
 - `tg.py permissions`, answering with every grant held and what each expands to, reaching no account and needing no grant. Without it the only way to learn a permission is to attempt an action and read the refusal
 - A defect list of thirteen entries, each breaking one guard and requiring the suite to notice, run on the default branch through the tests skill's harness
+- A NixOS module as `nixosModules.default`, carrying the unit the service depends on: `DynamicUser`, credentials read by systemd before the service drops its privileges, the session under `/var/lib/private`, a socket whose owner systemd sets, and a daily sweep of the outbox. It ships here because the isolation is the service's own property, not a detail each consumer reinvents
 
 ### Security
 
