@@ -23,6 +23,19 @@ class BadIdentifier(ValueError):
     """The chat or folder identifier is not a plain Telegram identifier."""
 
 
+def as_identifier(value):
+    """Validate an identifier and return it as a number.
+
+    The number matters as much as the validation. Telethon resolves a string as a
+    username or a phone number, never as an identifier, so a chat passed as text reaches
+    the account as a name nobody has.
+    """
+    name = str(value)
+    if not IDENTIFIER.match(name):
+        raise BadIdentifier(f"{name!r} is not a Telegram identifier")
+    return int(name)
+
+
 class PermissionFileError(ValueError):
     """The permission file holds a word no action table defines."""
 
@@ -180,7 +193,4 @@ class Store:
         return fields
 
     def _path(self, kind, identifier):
-        name = str(identifier)
-        if not IDENTIFIER.match(name):
-            raise BadIdentifier(f"{name!r} is not a Telegram identifier")
-        return self.root / kind / f"{name}.conf"
+        return self.root / kind / f"{as_identifier(identifier)}.conf"

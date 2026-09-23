@@ -30,6 +30,11 @@ class Handler:
             return _refused(str(unknown))
         except permissions.PermissionFileError as broken:
             return _refused(str(broken))
+        except Exception as unexpected:
+            # Anything else has to come back as an answer too. Letting it close the
+            # connection leaves the caller with an empty read and no way to tell a failure
+            # from a chat that holds nothing
+            return _refused(f"{type(unexpected).__name__}: {unexpected}")
 
     async def _dispatch(self, request):
         action = request.get("action", "")
@@ -47,7 +52,7 @@ class Handler:
         if action not in verbs.CHAT_ACTIONS:
             return _refused(f"no action is called {action!r}")
 
-        chat = request.get("chat")
+        chat = permissions.as_identifier(request.get("chat"))
         decision = self._store.chat_may(chat, action)
         if not decision.allowed:
             return _refused(decision.reason, remedy=_remedy(chat, action))
@@ -59,7 +64,7 @@ class Handler:
 
         # forward reaches two chats, so the destination decides as much as the source
         if action == "forward":
-            target = request.get("to")
+            target = permissions.as_identifier(request.get("to"))
             allowed_there = self._store.chat_may(target, "send")
             if not allowed_there.allowed:
                 return _refused(
@@ -70,7 +75,7 @@ class Handler:
         return _allowed(decision.by, action, result)
 
     async def _perform(self, action, request):
-        chat = request["chat"]
+        chat = permissions.as_identifier(request["chat"])
         if action == "read":
             messages = await self._client.history(chat, limit=request.get("limit"))
             return [_message(m) for m in messages]
@@ -93,7 +98,9 @@ class Handler:
             return None
         if action == "forward":
             await self._client.forward(
-                request["to"], request.get("ids", []), from_chat_id=chat
+                permissions.as_identifier(request["to"]),
+                request.get("ids", []),
+                from_chat_id=chat,
             )
             return None
         if action == "mark-read":
@@ -106,7 +113,7 @@ class Handler:
 
     async def _folder(self, request, action):
         """Answer a folder request, reporting membership that moved since the grant."""
-        folder_id = request.get("folder")
+        folder_id = permissions.as_identifier(request.get("folder"))
         decision = self._store.folder_may(folder_id, action)
         if not decision.allowed:
             return _refused(decision.reason, remedy=_folder_remedy(folder_id, action))

@@ -137,6 +137,35 @@ EOF
   '    if WILDCARD in words:' \
   'a wildcard grant permits an action no table defines, so a request naming anything at all goes through'
 
+# What the first live run found. Each of these passed the suite and failed against a real
+# account, so the stand-in now carries them
+defect 'live/identifier-type' 'tg_agentd/permissions.py' \
+  "$(
+    cat <<'EOF'
+    return int(name)
+EOF
+  )" \
+  '    return name' \
+  'a chat reaches the account as a string, which Telethon resolves as a username or a phone number, so every request names a stranger'
+
+defect 'live/entity-cache' 'tg_agentd/client.py' \
+  "$(
+    cat <<'EOF'
+        await self._telethon.get_dialogs()
+EOF
+  )" \
+  '        pass' \
+  'a fresh session never fills its entity cache, so a chat named by identifier cannot be resolved at all'
+
+defect 'live/unexpected-failure' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'EOF'
+        except Exception as unexpected:
+EOF
+  )" \
+  '        except permissions.BadIdentifier as unexpected:' \
+  'an unexpected failure closes the connection instead of answering, so the caller reads an empty result and cannot tell a failure from an empty chat'
+
 # Media. Both the subdirectory and the attachment name are chosen outside this service
 defect 'media/destination' 'tg_agentd/media.py' \
   "$(

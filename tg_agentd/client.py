@@ -31,6 +31,10 @@ class Client:
         """
         await self._telethon.connect()
         await self._telethon(UpdateStatusRequest(offline=True))
+        # The session caches each entity's access hash, and an identifier cannot be
+        # resolved without it. A fresh session has an empty cache, so a chat named by
+        # number reaches the account as a stranger until one pass has filled it
+        await self._telethon.get_dialogs()
 
     async def stop(self):
         await self._telethon.disconnect()
