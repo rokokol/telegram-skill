@@ -43,6 +43,10 @@ def build_parser():
     parser.add_argument("--remove", type=int, nargs="+", help="chats to remove, for folder-edit")
     parser.add_argument("--limit", type=int, help="how many messages to read")
     parser.add_argument(
+        "--search",
+        help="ask the server for messages holding this text, instead of reading history",
+    )
+    parser.add_argument(
         "--socket",
         default=DEFAULT_SOCKET,
         help="the service socket (default: $TG_SOCKET, else %(default)s)",
@@ -64,6 +68,7 @@ def request_from(options):
         "add": options.add,
         "remove": options.remove,
         "limit": options.limit,
+        "search": options.search,
     }
     return {key: value for key, value in named.items() if value is not None}
 

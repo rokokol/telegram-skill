@@ -77,7 +77,12 @@ class Handler:
     async def _perform(self, action, request):
         chat = permissions.as_identifier(request["chat"])
         if action == "read":
-            messages = await self._client.history(chat, limit=request.get("limit"))
+            # A search term goes to the server, which answers with the matches alone.
+            # Filtering here would mean reading a whole history to find one message
+            terms = {"search": request["search"]} if request.get("search") else {}
+            messages = await self._client.history(
+                chat, limit=request.get("limit"), **terms
+            )
             return [_message(m) for m in messages]
         if action in ("send", "reply"):
             sent = await self._client.send(
