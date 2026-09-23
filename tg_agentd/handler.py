@@ -44,6 +44,20 @@ class Handler:
         if action == "permissions":
             return _allowed(None, action, self._store.survey())
 
+        # Telegram shows a folder's identifier nowhere, so without this the permission
+        # for a folder could never be written. The count separates a grant from a
+        # mistake; the membership stays behind the grant, because that is the content
+        if action == "folder-list":
+            listed = [
+                {
+                    "id": getattr(folder, "id", None),
+                    "title": str(getattr(folder, "title", "")),
+                    "chats": len(folders.members_of(folder)),
+                }
+                for folder in await self._client.folders()
+            ]
+            return _allowed(None, action, {"folders": listed})
+
         # The target decides which vocabulary applies, not the word: "read" and "media"
         # appear in both tables and mean a different reach in each
         if "folder" in request:
