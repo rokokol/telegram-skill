@@ -24,7 +24,7 @@ in
 
     package = mkOption {
       type = types.package;
-      default = self.packages.${pkgs.system}.default;
+      default = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
       defaultText = "the flake's own tg-agentd";
       description = "The service to run";
     };
