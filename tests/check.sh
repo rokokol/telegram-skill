@@ -15,9 +15,9 @@ check.sh — the gate for the telegram skill
 
 Usage: check.sh [all | lint | behaviour]
 
-  all         both halves, in order (the default)
-  lint        the vendored checkers, the workflows, the flake and the documents
-  behaviour   the service's suite, against a stand-in for Telethon
+  check.sh all         both halves, in order (the default)
+  check.sh lint        the vendored checkers, the workflows, the flake and the documents
+  check.sh behaviour   the service's suite, against a stand-in for Telethon
 
 Exit codes:
   0  everything holds
@@ -63,13 +63,22 @@ cmd_lint() {
   python -m compileall -q tg_agentd tests
 
   echo "== no paragraph in the docs is hard-wrapped or ends on a full stop"
-  ./check-prose.sh
+  # find rather than git ls-files: this gate also runs in a copy of the tree that holds
+  # no .git, where the list would come out empty and every document would pass
+  local docs=()
+  while IFS= read -r doc; do docs+=("$doc"); done < <(
+    find . -name '*.md' -type f \
+      -not -path '*/.git/*' \
+      -not -path './falsify.out/*' \
+      -not -path './.pytest_cache/*' | sort
+  )
+  ./check-prose.sh "${docs[@]}"
 
   echo "== SKILL.md loads, every reference is reachable, and every link resolves"
   ./check-skill.sh -n telegram
 
   echo "== the changelog obeys the versioning skill's rules"
-  ./check-changelog.sh
+  ./check-changelog.sh CHANGELOG.md
 }
 
 cmd_behaviour() {
