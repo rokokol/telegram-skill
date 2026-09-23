@@ -7,6 +7,10 @@ action the permissions name, and each states what Telethon would otherwise assum
 """
 
 from telethon.tl.functions.account import UpdateStatusRequest
+from telethon.tl.functions.messages import (
+    GetDialogFiltersRequest,
+    UpdateDialogFilterRequest,
+)
 
 
 class Client:
@@ -74,6 +78,19 @@ class Client:
         return await self._telethon.forward_messages(
             to_chat_id, message_ids, from_peer=from_chat_id
         )
+
+    async def folders(self):
+        """Every folder the account has.
+
+        Telethon offers no high-level call for these, so the raw request is the interface.
+        `edit_folder` is a different thing: it moves a chat into the archive.
+        """
+        answer = await self._telethon(GetDialogFiltersRequest())
+        return list(getattr(answer, "filters", answer) or [])
+
+    async def update_folder(self, folder_id, folder):
+        """Replace a folder, or delete it when given nothing to put there."""
+        return await self._telethon(UpdateDialogFilterRequest(folder_id, folder))
 
     async def download(self, message, destination):
         """Download a message's media to a path the caller has already validated."""

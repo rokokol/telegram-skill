@@ -120,6 +120,13 @@ class Store:
             return False
         return fields.get(name, "").strip().lower() in TRUE_WORDS
 
+    def folder_field(self, folder_id, name):
+        """Read a plain setting from a folder's permission file, empty when absent."""
+        fields = self._fields("folders", folder_id)
+        if fields is None:
+            return ""
+        return fields.get(name, "").strip()
+
     def _decide(self, kind, identifier, action, table):
         granted = self._granted_words(kind, identifier, table)
         if granted is None:

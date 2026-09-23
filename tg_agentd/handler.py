@@ -10,7 +10,7 @@ the action is looked up in the vocabulary before the account is touched, and a b
 permission file is an answer rather than a crash: the service serves other chats after it.
 """
 
-from . import permissions, verbs
+from . import folders, permissions, verbs
 
 
 class Handler:
@@ -38,6 +38,11 @@ class Handler:
         # can only discover its permissions by attempting actions and reading refusals
         if action == "permissions":
             return _allowed(None, action, self._store.survey())
+
+        # The target decides which vocabulary applies, not the word: "read" and "media"
+        # appear in both tables and mean a different reach in each
+        if "folder" in request:
+            return await self._folder(request, action)
 
         if action not in verbs.CHAT_ACTIONS:
             return _refused(f"no action is called {action!r}")
@@ -99,6 +104,68 @@ class Handler:
         raise permissions.UnknownAction(f"no handler for {action!r}")
 
 
+    async def _folder(self, request, action):
+        """Answer a folder request, reporting membership that moved since the grant."""
+        folder_id = request.get("folder")
+        decision = self._store.folder_may(folder_id, action)
+        if not decision.allowed:
+            return _refused(decision.reason, remedy=_folder_remedy(folder_id, action))
+
+        found = await self._find_folder(folder_id)
+        if found is None:
+            return _refused(f"the account has no folder {folder_id}")
+        members = folders.members_of(found)
+
+        result = await self._perform_folder(action, request, found, members)
+        answer = _allowed(decision.by, action, result)
+        moved = folders.drift(self._store.folder_field(folder_id, "members"), members)
+        if moved:
+            answer["warning"] = moved
+        return answer
+
+    async def _find_folder(self, folder_id):
+        for folder in await self._client.folders():
+            if getattr(folder, "id", None) == int(folder_id):
+                return folder
+        return None
+
+    async def _perform_folder(self, action, request, folder, members):
+        if action == "folder-read":
+            return {
+                "id": getattr(folder, "id", None),
+                "title": str(getattr(folder, "title", "")),
+                "members": members,
+            }
+        if action == "digest":
+            return {"chats": await self._digest(members)}
+        if action == "read":
+            return {"members": members}
+        if action == "folder-edit":
+            wanted = sorted(set(members) | set(request.get("add", [])))
+            wanted = [m for m in wanted if m not in set(request.get("remove", []))]
+            folder.include_peers = wanted
+            await self._client.update_folder(getattr(folder, "id"), folder)
+            return {"members": wanted}
+        if action == "folder-delete":
+            await self._client.update_folder(getattr(folder, "id"), None)
+            return None
+        raise permissions.UnknownAction(f"no handler for {action!r}")
+
+    async def _digest(self, members):
+        """Unread counts for the folder's chats, read without marking anything."""
+        inside = set(members)
+        counted = []
+        for dialog in await self._client.dialogs():
+            if getattr(dialog, "id", None) in inside:
+                counted.append(
+                    {
+                        "chat": dialog.id,
+                        "name": getattr(dialog, "name", ""),
+                        "unread": getattr(dialog, "unread_count", 0),
+                    }
+                )
+        return counted
+
     async def _download(self, chat, message_ids):
         """Fetch the named messages and write their attachments into the outbox.
 
@@ -144,3 +211,7 @@ def _refused(error, remedy=None):
 
 def _remedy(chat, action):
     return f"add {action} to 'allow: ' in the permission file for chat {chat}"
+
+
+def _folder_remedy(folder, action):
+    return f"add {action} to 'allow: ' in the permission file for folder {folder}"
