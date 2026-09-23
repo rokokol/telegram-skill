@@ -65,7 +65,11 @@ def build_parser():
 def line_for(message):
     """One event as one line: nothing in it may contain a newline."""
     who = "self" if message.get("out") else str(message.get("from"))
-    text = (message.get("text") or "[attachment]").replace("\n", " ")
+    kind = message.get("media")
+    text = (message.get("text") or "").replace("\n", " ")
+    if kind:
+        text = f"[{kind}]" + (f" {text}" if text else "")
+    text = text or "[empty]"
     return f"{message['id']} {who} {text}"
 
 

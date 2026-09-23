@@ -282,6 +282,24 @@ class Handler:
         return written
 
 
+# The kinds Telethon exposes as named attributes, most specific first: a sticker and a
+# voice note are both documents, and calling either one a document says the less useful
+# of the two true things
+MEDIA_KINDS = ("sticker", "voice", "photo", "video", "audio", "document")
+
+
+def _media_kind(message):
+    """What a message carries, or None when it carries only words.
+
+    Without this a sticker, a photo and a voice note are one blank line each, and a
+    summary of a chat drops everything nobody typed.
+    """
+    for kind in MEDIA_KINDS:
+        if getattr(message, kind, None) is not None:
+            return kind
+    return None
+
+
 def _message(message):
     if message is None:
         return None
@@ -290,6 +308,7 @@ def _message(message):
         "text": getattr(message, "text", ""),
         "from": getattr(message, "sender_id", None),
         "out": getattr(message, "out", False),
+        "media": _media_kind(message),
     }
 
 

@@ -37,8 +37,21 @@ def test_the_account_own_message_is_an_event_too():
     assert " self " in line
 
 
-def test_an_attachment_without_text_still_makes_a_line():
-    assert "[attachment]" in watch.line_for({"id": 7, "from": 1, "text": "", "out": False})
+def test_an_attachment_is_named_by_its_kind():
+    line = watch.line_for({"id": 7, "from": 1, "text": "", "out": False, "media": "sticker"})
+    assert "[sticker]" in line
+
+
+def test_a_caption_follows_the_kind_that_carries_it():
+    line = watch.line_for(
+        {"id": 8, "from": 1, "text": "look", "out": False, "media": "photo"}
+    )
+    assert line.endswith("[photo] look")
+
+
+def test_a_message_with_neither_text_nor_media_is_still_a_line():
+    line = watch.line_for({"id": 9, "from": 1, "text": "", "out": False, "media": None})
+    assert line == "9 1 [empty]"
 
 
 def test_the_request_asks_from_the_last_seen_rather_than_for_the_last_few():
