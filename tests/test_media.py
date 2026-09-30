@@ -66,6 +66,17 @@ def test_a_file_name_from_the_far_side_cannot_escape_either(outbox):
     assert "passwd" in path.name
 
 
+@pytest.mark.parametrize("name", ["Отчет_НИР.pdf", "日本語.txt", "Ünïcödé-файл.docx"])
+def test_a_name_in_any_alphabet_keeps_its_letters(name):
+    assert media.component(name) == name
+
+
+@pytest.mark.parametrize("name", ["Отчет/../x", "a\\b", "a\0b", "a\nb", "a‮b"])
+def test_a_name_loses_separators_and_controls_whatever_its_alphabet(name):
+    cleaned = media.component(name)
+    assert not set(cleaned) & {"/", "\\", "\0", "\n", "‮"}
+
+
 def test_downloading_needs_its_own_grant(ask, store):
     grant(store, 777, "read")
     answer = ask({"action": "media", "chat": 777, "ids": [1]})

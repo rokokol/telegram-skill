@@ -10,6 +10,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ### Fixed
 
+- File names in any alphabet. A name was cut down to ASCII letters, so `Отчет.pdf` arrived as `-----.pdf`, both in the outbox and on the other side of an upload. Path separators and control characters are still replaced
 - `media` downloads. The service read `--media-dir` and then never used it, so every download was refused with "this service has no outbox", whatever the unit and the permissions said
 
 ### Removed

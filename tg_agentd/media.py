@@ -11,9 +11,10 @@ the lifetime has one owner and it runs even while nothing is downloaded.
 import unicodedata
 from pathlib import Path
 
-# A component may hold letters, digits and a few separators. Everything else, the path
-# separator and the null byte included, is replaced
-SAFE = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._- ")
+# A component may hold letters and digits of any alphabet, and these separators.
+# Everything else, the path separator, the null byte and every control or format
+# character included, is replaced
+SAFE = set("._- ")
 
 FALLBACK = "file"
 
@@ -29,7 +30,10 @@ def component(name, *, fallback=FALLBACK):
     cannot become two directories.
     """
     text = unicodedata.normalize("NFC", str(name))
-    cleaned = "".join(character if character in SAFE else "-" for character in text)
+    cleaned = "".join(
+        character if character.isalnum() or character in SAFE else "-"
+        for character in text
+    )
     cleaned = cleaned.strip(" .-")
     return cleaned or fallback
 

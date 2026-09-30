@@ -177,6 +177,11 @@ EOF
   '        safe_group = str(group)' \
   'a download writes outside the outbox, so an attachment lands anywhere the service can write'
 
+defect 'media/component' 'tg_agentd/media.py' \
+  'character if character.isalnum() or character in SAFE else "-"' \
+  'character' \
+  'a file name keeps its path separators and control characters, so it can name a place outside its directory'
+
 # Uploads. The name and the bytes come from the caller, and the request is as long as
 # the file
 defect 'upload/name' 'tg_agentd/handler.py' \
