@@ -328,7 +328,9 @@ class Handler:
             result["written"].append(
                 str(await self._client.download(message, destination))
             )
-        return result
+        # An empty list would be read on every download for nothing, so only what
+        # happened is named
+        return {key: found for key, found in result.items() if found or key == "written"}
 
 
 def _upload(attached):

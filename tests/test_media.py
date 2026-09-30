@@ -127,8 +127,14 @@ def test_a_message_that_is_not_there_is_reported_rather_than_downloaded(ask, sto
 def test_a_message_with_nothing_attached_is_reported_rather_than_downloaded(ask, store):
     grant(store, 777, "media")
     answer = ask({"action": "media", "chat": 777, "ids": [3]})
-    assert answer["result"] == {"written": [], "missing": [], "no_file": [3]}
+    assert answer["result"] == {"written": [], "no_file": [3]}
     assert not ask.fake.called("download_media")
+
+
+def test_a_clean_download_answers_with_what_was_written_alone(ask, store):
+    grant(store, 777, "media")
+    answer = ask({"action": "media", "chat": 777, "ids": [1]})
+    assert set(answer["result"]) == {"written"}
 
 
 def test_a_service_with_no_outbox_refuses_rather_than_inventing_a_path(store):

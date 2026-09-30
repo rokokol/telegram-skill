@@ -17,7 +17,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 ### Fixed
 
 - A download is named after the document it holds, where it was named `ID.bin` every time; an attachment with no name of its own gets its message and extension. The service read a name from `message.file_name`, which Telethon does not have
-- A download of an identifier the chat does not hold, or of a message with nothing attached, answered success with the path `None`. The answer is now `{"written", "missing", "no_file"}`, and `read` names a document's file
+- A download of an identifier the chat does not hold, or of a message with nothing attached, answered success with the path `None`. The answer now lists what was `written`, and names `missing` and `no_file` only when either holds something. `read` names a document's file
 - File names in any alphabet. A name was cut down to ASCII letters, so `Отчет.pdf` arrived as `-----.pdf`, both in the outbox and on the other side of an upload. Path separators and control characters are still replaced
 - `media` downloads. The service read `--media-dir` and then never used it, so every download was refused with "this service has no outbox", whatever the unit and the permissions said
 
