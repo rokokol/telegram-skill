@@ -11,8 +11,8 @@ A word outside these tables is a refusal, never a silent pass.
 CHAT_ACTIONS = {
     "read": "read message history",
     "media": "download attached files into the outbox",
-    "send": "send a new message",
-    "reply": "reply to a message",
+    "send": "send a new message, a file included",
+    "reply": "reply to a message, a file included",
     "edit": "edit a message the account itself sent",
     "delete": "delete messages for this account alone",
     "delete-for-all": "delete messages for every participant, the account's own included",

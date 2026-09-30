@@ -14,6 +14,12 @@ import socket
 # systemd hands inherited descriptors to the service starting at 3
 SD_LISTEN_FDS_START = 3
 
+# An upload travels inside its request as base64, so a request line has to hold the
+# largest file plus a third and the rest of the JSON. asyncio's default of 64 KiB would
+# refuse any real document
+MAX_FILE = 50 * 1024 * 1024
+MAX_REQUEST = MAX_FILE * 4 // 3 + 1024 * 1024
+
 
 def inherited_socket():
     """The socket systemd passed, or None when the process was started on its own."""
@@ -33,9 +39,13 @@ class Server:
 
     async def serve_forever(self, *, path=None, sock=None):
         if sock is not None:
-            server = await asyncio.start_unix_server(self._client, sock=sock)
+            server = await asyncio.start_unix_server(
+                self._client, sock=sock, limit=MAX_REQUEST
+            )
         else:
-            server = await asyncio.start_unix_server(self._client, path=path)
+            server = await asyncio.start_unix_server(
+                self._client, path=path, limit=MAX_REQUEST
+            )
         async with server:
             await server.serve_forever()
 
@@ -43,6 +53,16 @@ class Server:
         try:
             async for line in reader:
                 await self._exchange(line, writer)
+        except ValueError:
+            # The stream raises this when a line outgrows the limit. The rest of that
+            # line is still unread, so the connection cannot continue, but the caller
+            # gets a reason instead of an empty read
+            answer = {
+                "ok": False,
+                "error": f"request too large: a file may be at most {MAX_FILE} bytes",
+            }
+            writer.write(json.dumps(answer).encode() + b"\n")
+            await writer.drain()
         finally:
             writer.close()
 

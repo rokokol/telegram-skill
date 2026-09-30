@@ -64,6 +64,12 @@ class Client:
         """Send a message, optionally as a reply. No typing status is announced."""
         return await self._telethon.send_message(chat_id, text, reply_to=reply_to)
 
+    async def send_file(self, chat_id, file, caption=None, reply_to=None):
+        """Send a file, with the text as its caption. No upload status is announced."""
+        return await self._telethon.send_file(
+            chat_id, file, caption=caption, reply_to=reply_to
+        )
+
     async def edit(self, chat_id, message_id, text):
         """Edit a message the account itself sent."""
         return await self._telethon.edit_message(chat_id, message_id, text=text)

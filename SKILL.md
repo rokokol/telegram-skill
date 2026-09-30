@@ -1,6 +1,6 @@
 ---
 name: telegram
-description: "Reach the user's Telegram account over MTProto through a service that holds the secret and decides by per-chat permissions the agent cannot grant itself: read a chat, answer in it, summarise unread messages across a folder, download attachments, forward, edit and delete. Use when the request needs the account's own chats rather than an explanation of Telegram, and when a refusal has to be turned into a permission the user applies. Triggers: check telegram, what did they write, read the chat, answer in telegram, send a telegram message, unread messages, what is new in telegram, forward this message, download the attachment, what am I allowed in telegram, проверь телеграм, что мне пишут, что нового в телеграме, прочитай чат, ответь в телеграме, напиши в тг, непрочитанные сообщения, сделай сводку по папке, перешли сообщение, скачай вложение, что мне разрешено в телеграме"
+description: "Reach the user's Telegram account over MTProto through a service that holds the secret and decides by per-chat permissions the agent cannot grant itself: read a chat, answer in it, send a file, summarise unread messages across a folder, download attachments, forward, edit and delete. Use when the request needs the account's own chats rather than an explanation of Telegram, and when a refusal has to be turned into a permission the user applies. Triggers: check telegram, what did they write, read the chat, answer in telegram, send a telegram message, send this file to telegram, unread messages, what is new in telegram, forward this message, download the attachment, what am I allowed in telegram, проверь телеграм, что мне пишут, что нового в телеграме, прочитай чат, ответь в телеграме, напиши в тг, скинь файл в тг, непрочитанные сообщения, сделай сводку по папке, перешли сообщение, скачай вложение, что мне разрешено в телеграме"
 license: MIT
 ---
 
@@ -34,6 +34,7 @@ This holds for a message the user themself sent in a chat. The service gates an 
 
 - **Say what will be sent and where, in the user's own words, before sending it.** The service allows it; that is not the same as the user wanting this text in that chat right now
 - **Prefer `reply` over `send` when answering a specific message**, so the thread stays readable to the person on the other side
+- **A file goes out under the same grant as words**, through `send` or `reply` with `--file`. This client reads the file and hands the service its bytes, so name the file and its size to the user before sending: nothing on the service side looks at what it is
 - **`forward` reaches two chats and needs a grant on both.** Sending a copy of the text instead hides where it came from, so forward when the origin matters and say plainly when you did not
 
 ## Mistakes worth naming

@@ -10,7 +10,11 @@ the action is looked up in the vocabulary before the account is touched, and a b
 permission file is an answer rather than a crash: the service serves other chats after it.
 """
 
-from . import folders, permissions, verbs
+import base64
+import binascii
+import io
+
+from . import folders, media, permissions, verbs
 
 # Actions that are not permissions of their own, and the permission each one takes
 REQUIRES = {"topics": "read"}
@@ -18,6 +22,10 @@ REQUIRES = {"topics": "read"}
 
 class ChatIsNotAForum(ValueError):
     """Topics were asked of a chat that keeps none."""
+
+
+class BadUpload(ValueError):
+    """A file in a request that cannot become an upload."""
 
 
 class Handler:
@@ -37,7 +45,7 @@ class Handler:
             return _refused(str(unknown))
         except permissions.PermissionFileError as broken:
             return _refused(str(broken))
-        except ChatIsNotAForum as plain:
+        except (ChatIsNotAForum, BadUpload) as plain:
             return _refused(str(plain))
         except Exception as unexpected:
             # Anything else has to come back as an answer too. Letting it close the
@@ -182,9 +190,21 @@ class Handler:
             )
             return [_message(m) for m in messages]
         if action in ("send", "reply"):
-            sent = await self._client.send(
-                chat, request.get("text", ""), reply_to=request.get("reply_to")
-            )
+            # A file is a message too, so it takes the grant that sends words. Its bytes
+            # arrive in the request because the service never opens a path on a caller's
+            # behalf: a path would reach whatever this process can read, its session
+            # included
+            if request.get("file"):
+                sent = await self._client.send_file(
+                    chat,
+                    _upload(request["file"]),
+                    caption=request.get("text"),
+                    reply_to=request.get("reply_to"),
+                )
+            else:
+                sent = await self._client.send(
+                    chat, request.get("text", ""), reply_to=request.get("reply_to")
+                )
             if action == "reply" and self._store.chat_flag(chat, "mark-read-on-reply"):
                 # A reply with no preceding read receipt is a sequence no person
                 # produces, and it identifies the account as automated
@@ -296,6 +316,21 @@ class Handler:
             destination = self._outbox.place(f"chat-{chat}", name)
             written.append(str(await self._client.download(message, destination)))
         return written
+
+
+def _upload(attached):
+    """The bytes of an attached file as a stream Telegram names after the file.
+
+    The name comes from the caller and reaches the other side as the file name, so it is
+    reduced to one path component like a download's.
+    """
+    try:
+        data = base64.b64decode(attached.get("data", ""), validate=True)
+    except (binascii.Error, ValueError):
+        raise BadUpload("the attached file is not valid base64") from None
+    stream = io.BytesIO(data)
+    stream.name = media.component(attached.get("name", ""))
+    return stream
 
 
 # The kinds Telethon exposes as named attributes, most specific first: a sticker and a

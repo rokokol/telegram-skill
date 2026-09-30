@@ -7,6 +7,7 @@ at hand. Everything that decides lives behind the socket.
 """
 
 import argparse
+import base64
 import json
 import os
 import socket
@@ -26,6 +27,7 @@ def build_parser():
             "  tg.py permissions\n"
             "  tg.py read --chat -1001234567890 --limit 20\n"
             "  tg.py send --chat 777 --text 'on my way'\n"
+            "  tg.py send --chat 777 --file report.pdf --text 'the report'\n"
             "  tg.py digest --folder 5\n"
             "  tg.py media --chat 777 --ids 12 13\n"
         ),
@@ -35,7 +37,13 @@ def build_parser():
     parser.add_argument("--chat", help="the chat identifier the action applies to")
     parser.add_argument("--folder", help="the folder identifier the action applies to")
     parser.add_argument("--to", help="the destination chat, for forward")
-    parser.add_argument("--text", help="the message text, for send, reply and edit")
+    parser.add_argument(
+        "--text", help="the message text, for send, reply and edit; with --file, its caption"
+    )
+    parser.add_argument(
+        "--file",
+        help="a file to send with send or reply; this client reads it and the service never opens a path",
+    )
     parser.add_argument("--reply-to", type=int, help="the message this one answers")
     parser.add_argument("--id", type=int, help="one message identifier, for edit")
     parser.add_argument("--ids", type=int, nargs="+", help="message identifiers")
@@ -78,13 +86,26 @@ def request_from(options):
         "topic": options.topic,
         "since": options.since,
     }
-    return {key: value for key, value in named.items() if value is not None}
+    request = {key: value for key, value in named.items() if value is not None}
+    if options.file:
+        with open(options.file, "rb") as attached:
+            data = attached.read()
+        request["file"] = {
+            "name": os.path.basename(options.file),
+            "data": base64.b64encode(data).decode(),
+        }
+    return request
 
 
 def ask(path, request):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.connect(path)
-        connection.sendall(json.dumps(request).encode() + b"\n")
+        try:
+            connection.sendall(json.dumps(request).encode() + b"\n")
+        except (BrokenPipeError, ConnectionResetError):
+            # The service stops reading a request that outgrows its limit and answers
+            # at once, so the answer may already be waiting behind the broken send
+            pass
         answer = b""
         while not answer.endswith(b"\n"):
             block = connection.recv(65536)

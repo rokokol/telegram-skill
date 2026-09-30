@@ -112,6 +112,12 @@ class FakeClient:
         self._record("send_message", entity=entity, message=message, reply_to=reply_to)
         return Message(id=999, text=message, sender_id=1, out=True)
 
+    async def send_file(self, entity, file, caption=None, reply_to=None, **kwargs):
+        self._record(
+            "send_file", entity=entity, file=file, caption=caption, reply_to=reply_to
+        )
+        return Message(id=1000, text=caption or "", sender_id=1, out=True)
+
     async def edit_message(self, entity, message, text=None, **kwargs):
         self._record("edit_message", entity=entity, message=message, text=text)
 

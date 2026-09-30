@@ -177,6 +177,27 @@ EOF
   '        safe_group = str(group)' \
   'a download writes outside the outbox, so an attachment lands anywhere the service can write'
 
+# Uploads. The name and the bytes come from the caller, and the request is as long as
+# the file
+defect 'upload/name' 'tg_agentd/handler.py' \
+  '    stream.name = media.component(attached.get("name", ""))' \
+  '    stream.name = attached.get("name", "")' \
+  'a caller-chosen name with a path in it reaches the other side as the file name'
+
+defect 'upload/base64' 'tg_agentd/handler.py' \
+  'base64.b64decode(attached.get("data", ""), validate=True)' \
+  'base64.b64decode(attached.get("data", ""))' \
+  'a corrupted upload is sent as whatever bytes survive decoding, instead of being refused'
+
+defect 'upload/limit' 'tg_agentd/server.py' \
+  "$(
+    cat <<'EOF'
+        except ValueError:
+EOF
+  )" \
+  '        except KeyError:' \
+  'a file over the limit closes the connection with no answer, so the caller cannot tell a refusal from a crash'
+
 # Forwarding reaches two chats, so the destination decides as much as the source
 defect 'forward/destination' 'tg_agentd/handler.py' \
   "$(

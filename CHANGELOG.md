@@ -4,6 +4,10 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ## 2026-09-30
 
+### Added
+
+- Sending a file with `send` or `reply` and `tg.py --file`, under the same grant as a message. The client reads the file and puts its bytes into the request; the service never opens a path. A file may be up to 50 MiB, and a larger one is refused with an answer rather than a closed connection
+
 ### Fixed
 
 - `media` downloads. The service read `--media-dir` and then never used it, so every download was refused with "this service has no outbox", whatever the unit and the permissions said
