@@ -55,7 +55,7 @@ cmd_lint() {
   ./check-pins.sh
 
   echo "== the Nix here is formatted, and says nothing it does not mean"
-  nixfmt --check flake.nix nix/package.nix
+  nixfmt --check flake.nix nix/*.nix
   statix check
   deadnix --fail
 
