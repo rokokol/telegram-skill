@@ -182,6 +182,17 @@ defect 'media/component' 'tg_agentd/media.py' \
   'character' \
   'a file name keeps its path separators and control characters, so it can name a place outside its directory'
 
+defect 'media/missing' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'EOF'
+            if message is None:
+                result["missing"].append(wanted)
+                continue
+EOF
+  )" \
+  '            pass' \
+  'a message the chat does not hold reads as a message with nothing attached, so a mistyped identifier is never noticed'
+
 # Uploads. The name and the bytes come from the caller, and the request is as long as
 # the file
 defect 'upload/name' 'tg_agentd/handler.py' \

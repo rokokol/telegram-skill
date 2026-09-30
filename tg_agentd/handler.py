@@ -307,15 +307,28 @@ class Handler:
         """Fetch the named messages and write their attachments into the outbox.
 
         Reading the messages to download them is the same call that reads history, so it
-        marks nothing read here either.
+        marks nothing read here either. An identifier the chat does not hold, and a
+        message with nothing attached, are reported apart: otherwise a request that
+        downloaded nothing reads as one that succeeded.
         """
         messages = await self._client.history(chat, ids=message_ids)
-        written = []
-        for message in messages:
-            name = getattr(message, "file_name", None) or f"{getattr(message, 'id', 0)}.bin"
+        result = {"written": [], "missing": [], "no_file": []}
+        for wanted, message in zip(message_ids, messages):
+            if message is None:
+                result["missing"].append(wanted)
+                continue
+            attached = getattr(message, "file", None)
+            if attached is None:
+                result["no_file"].append(wanted)
+                continue
+            # Only a document carries a name. A photo or a voice note gets its message
+            # and the extension Telegram reports for it
+            name = attached.name or f"{wanted}{attached.ext or ''}"
             destination = self._outbox.place(f"chat-{chat}", name)
-            written.append(str(await self._client.download(message, destination)))
-        return written
+            result["written"].append(
+                str(await self._client.download(message, destination))
+            )
+        return result
 
 
 def _upload(attached):
@@ -360,6 +373,8 @@ def _message(message):
         "from": getattr(message, "sender_id", None),
         "out": getattr(message, "out", False),
         "media": _media_kind(message),
+        # The name a document will be downloaded under, so it can be chosen by name
+        "file": getattr(getattr(message, "file", None), "name", None),
     }
 
 

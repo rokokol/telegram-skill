@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from tests.fake_telethon import FakeClient, Message
+from tests.fake_telethon import FakeClient, FakeFile, Message
 from tg_agentd import client as client_module
 from tg_agentd import handler, permissions
 
@@ -50,6 +50,15 @@ def test_an_attachment_is_named_by_kind(store, monkeypatch, kind):
 def test_a_plain_message_carries_no_media_field(store, monkeypatch):
     answer = ask_with(store, [Message(id=1, text="words", sender_id=42)], monkeypatch)
     assert answer["result"][0]["media"] is None
+    assert answer["result"][0]["file"] is None
+
+
+# Without the name the agent downloads to find out what a document is
+def test_a_document_says_the_name_it_will_be_downloaded_under(store, monkeypatch):
+    carried = Carrying(1, "document")
+    carried.file = FakeFile("Отчет.pdf", ".pdf")
+    answer = ask_with(store, [carried], monkeypatch)
+    assert answer["result"][0]["file"] == "Отчет.pdf"
 
 
 def test_a_caption_survives_beside_its_attachment(store, monkeypatch):

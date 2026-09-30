@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from tests.fake_telethon import FakeClient, Message
+from tests.fake_telethon import FakeClient, FakeFile, Message
 from tg_agentd import client as client_module
 from tg_agentd import handler, media, permissions
 
@@ -31,7 +31,15 @@ def store(tmp_path):
 @pytest.fixture
 def ask(store, outbox, monkeypatch):
     monkeypatch.setattr(client_module, "UpdateStatusRequest", _FakeStatusRequest)
-    fake = FakeClient(messages={777: [Message(id=1, text="file", sender_id=42)]})
+    fake = FakeClient(
+        messages={
+            777: [
+                Message(id=1, text="", sender_id=42, file=FakeFile("Отчет.pdf", ".pdf")),
+                Message(id=2, text="", sender_id=42, file=FakeFile(None, ".jpg")),
+                Message(id=3, text="words only", sender_id=42),
+            ]
+        }
+    )
     served = handler.Handler(store, client_module.Client(fake), outbox=outbox)
 
     def call(request):
@@ -94,6 +102,33 @@ def test_downloading_never_marks_the_chat_read(ask, store):
     assert answer["ok"] is True
     assert ask.fake.called("download_media")
     assert not ask.fake.called("send_read_acknowledge")
+
+
+def test_a_download_keeps_the_name_the_document_carries(ask, store):
+    grant(store, 777, "media")
+    answer = ask({"action": "media", "chat": 777, "ids": [1]})
+    assert [path.rsplit("/", 1)[-1] for path in answer["result"]["written"]] == ["Отчет.pdf"]
+
+
+def test_an_attachment_with_no_name_is_named_by_its_message_and_kind(ask, store):
+    grant(store, 777, "media")
+    answer = ask({"action": "media", "chat": 777, "ids": [2]})
+    assert [path.rsplit("/", 1)[-1] for path in answer["result"]["written"]] == ["2.jpg"]
+
+
+def test_a_message_that_is_not_there_is_reported_rather_than_downloaded(ask, store):
+    grant(store, 777, "media")
+    answer = ask({"action": "media", "chat": 777, "ids": [1, 99]})
+    assert answer["result"]["missing"] == [99]
+    assert len(answer["result"]["written"]) == 1
+    assert all(call["message"] is not None for call in ask.fake.called("download_media"))
+
+
+def test_a_message_with_nothing_attached_is_reported_rather_than_downloaded(ask, store):
+    grant(store, 777, "media")
+    answer = ask({"action": "media", "chat": 777, "ids": [3]})
+    assert answer["result"] == {"written": [], "missing": [], "no_file": [3]}
+    assert not ask.fake.called("download_media")
 
 
 def test_a_service_with_no_outbox_refuses_rather_than_inventing_a_path(store):

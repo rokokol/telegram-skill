@@ -10,11 +10,21 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class FakeFile:
+    """Stands in for Telethon's message.file: a name only a document carries, and an ext."""
+
+    name: str | None
+    ext: str
+
+
+@dataclass
 class Message:
     id: int
     text: str
     sender_id: int
     out: bool = False
+    # Telethon's message.file, which is None on a message with nothing attached
+    file: FakeFile | None = None
 
 
 @dataclass
@@ -100,7 +110,13 @@ class FakeClient:
 
     async def get_messages(self, entity, limit=None, **kwargs):
         self._record("get_messages", entity=entity, limit=limit, **kwargs)
-        return list(self.messages.get(entity, []))[: limit or None]
+        held = list(self.messages.get(entity, []))
+        # Asked by identifier, Telethon answers in the order asked, with None where the
+        # chat holds no such message
+        if kwargs.get("ids") is not None:
+            by_id = {message.id: message for message in held}
+            return [by_id.get(wanted) for wanted in kwargs["ids"]]
+        return held[: limit or None]
 
     async def get_dialogs(self, **kwargs):
         self._record("get_dialogs", **kwargs)
