@@ -23,6 +23,11 @@
       # than being written again by every consumer
       nixosModules.default = import ./nix/module.nix { inherit self; };
 
+      # The module's sandbox exists only in a booted system, so it is tested in one
+      checks = forAllSystems (pkgs: {
+        vm = import ./nix/vm-test.nix { inherit self pkgs; };
+      });
+
       # The pinned toolbox for check.sh, locally and in CI — a linter looked up from a
       # registry at job time makes the run a test of someone else's mirror
       devShells = forAllSystems (pkgs: {

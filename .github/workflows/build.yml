@@ -32,3 +32,23 @@ jobs:
       # run here and the one run locally are the same
       - name: tests/check.sh (self-testing gate)
         run: nix develop --no-write-lock-file -c ./tests/check.sh
+
+  # The unit's sandbox exists only in a booted system, so the module is tested in a VM.
+  # The runner exposes /dev/kvm to root alone, and nix builds as another user
+  vm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: let the build user reach /dev/kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: system-features = nixos-test benchmark big-parallel kvm
+      - name: nix build .#checks.x86_64-linux.vm
+        run: nix build --no-write-lock-file -L .#checks.x86_64-linux.vm

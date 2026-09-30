@@ -6,7 +6,13 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ### Added
 
+- A NixOS VM test of the module, `checks.<system>.vm`, run in CI. It boots the unit with a probe in place of the service and holds four properties: a download is readable by a person, the session is not, the service cannot write its permissions, and only the socket user reaches the socket
+- An assertion that `permissionsDir` and `outboxDir` lie outside the service's StateDirectory
 - Sending a file with `send` or `reply` and `tg.py --file`, under the same grant as a message. The client reads the file and puts its bytes into the request; the service never opens a path. A file may be up to 50 MiB, and a larger one is refused with an answer rather than a closed connection
+
+### Changed
+
+- `permissionsDir` defaults to `/var/lib/tg-agent-permissions` and `outboxDir` to `/var/lib/tg-agent-outbox`, both outside the StateDirectory. Inside it, systemd hands the tree to the service's dynamic user and mounts it id-mapped: the service could write its own permissions, the outbox refused its downloads with EACCES, and no person could open one. Existing permission files have to be moved to the new directory by hand
 
 ### Fixed
 

@@ -11,6 +11,7 @@
 # and the credentials in a namespace no other process shares; the socket is the only way in
 let
   cfg = config.services.tg-agent;
+  stateDirectory = "tg-agent";
   inherit (lib)
     mkEnableOption
     mkIf
@@ -62,21 +63,23 @@ in
 
     permissionsDir = mkOption {
       type = types.path;
-      default = "/var/lib/tg-agent/permissions";
+      default = "/var/lib/tg-agent-permissions";
       description = ''
         Where the per-chat and per-folder permission files live. The service only reads
         them. Keep them out of reach of whatever writes on the agent's behalf: a
-        permission the agent can edit is not a permission
+        permission the agent can edit is not a permission. It must sit outside
+        StateDirectory, which systemd hands to the service's dynamic user whole
       '';
     };
 
     outboxDir = mkOption {
       type = types.path;
-      default = "/var/lib/tg-agent/outbox";
+      default = "/var/lib/tg-agent-outbox";
       description = ''
-        Where downloaded attachments land. It sits outside StateDirectory on purpose:
-        under DynamicUser that path is /var/lib/private, which no unprivileged user can
-        enter, and the point of a download is that a person can open it
+        Where downloaded attachments land. It must sit outside StateDirectory: under
+        DynamicUser that path is /var/lib/private, which no unprivileged user can enter,
+        and systemd mounts it id-mapped, so inside the unit the outbox group maps to
+        nobody and the service cannot write there either
       '';
     };
 
@@ -109,6 +112,19 @@ in
   };
 
   config = mkIf cfg.enable {
+    # StateDirectory belongs to the service's dynamic user and is mounted id-mapped. The
+    # permissions inside it become writable by the service, and the outbox unwritable
+    assertions =
+      map
+        (name: {
+          assertion = !lib.hasPrefix "/var/lib/${stateDirectory}/" "${toString cfg.${name}}/";
+          message = "services.tg-agent.${name} must lie outside /var/lib/${stateDirectory}, the service's StateDirectory";
+        })
+        [
+          "permissionsDir"
+          "outboxDir"
+        ];
+
     # The login is interactive, and the session it writes has to land in the same state
     # directory the service reads — which under DynamicUser is inside /var/lib/private,
     # where no one can go. So the login runs as the service does, through systemd, with a
@@ -126,7 +142,7 @@ in
           exec systemd-run --pty --wait --collect --quiet \
             --unit=tg-agent-login \
             --property=DynamicUser=yes \
-            --property=StateDirectory=tg-agent \
+            --property=StateDirectory=${stateDirectory} \
             --property="LoadCredential=api_id:${cfg.apiIdFile}" \
             --property="LoadCredential=api_hash:${cfg.apiHashFile}" \
             ${lib.getExe cfg.package} \
@@ -181,7 +197,7 @@ in
               "api_id:${cfg.apiIdFile}"
               "api_hash:${cfg.apiHashFile}"
             ];
-            StateDirectory = "tg-agent";
+            StateDirectory = stateDirectory;
 
             # The outbox is the one path outside the namespace the service may write
             ReadWritePaths = [ cfg.outboxDir ];
