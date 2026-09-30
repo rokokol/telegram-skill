@@ -1,7 +1,6 @@
-"""Downloads land inside the outbox and nowhere else, and they expire."""
+"""Downloads land inside the outbox and nowhere else."""
 
 import asyncio
-import time
 
 import pytest
 
@@ -19,7 +18,7 @@ class _FakeStatusRequest:
 def outbox(tmp_path):
     path = tmp_path / "outbox"
     path.mkdir()
-    return media.Outbox(path, keep_for=3600)
+    return media.Outbox(path)
 
 
 @pytest.fixture
@@ -65,24 +64,6 @@ def test_a_file_name_from_the_far_side_cannot_escape_either(outbox):
     path = outbox.place("chat-777", "../../../etc/passwd")
     assert str(path).startswith(str(outbox.root))
     assert "passwd" in path.name
-
-
-def test_expired_files_are_removed_and_fresh_ones_are_kept(tmp_path):
-    root = tmp_path / "outbox"
-    root.mkdir()
-    box = media.Outbox(root, keep_for=60)
-    old = root / "old.bin"
-    old.write_bytes(b"x")
-    fresh = root / "fresh.bin"
-    fresh.write_bytes(b"x")
-    stale = time.time() - 3600
-    import os
-
-    os.utime(old, (stale, stale))
-    removed = box.sweep()
-    assert old.name in removed
-    assert not old.exists()
-    assert fresh.exists()
 
 
 def test_downloading_needs_its_own_grant(ask, store):

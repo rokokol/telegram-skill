@@ -4,12 +4,10 @@ Two names reach this module from outside and neither is trusted. The agent choos
 subdirectory, and whoever sent the attachment chose its file name. Both are reduced to a
 single path component before they become a path.
 
-The directory also expires its contents. Without that, reading a chat's attachments once
-leaves a copy of them on disk for good, which is the outcome the separate media
-permission exists to avoid.
+Expiry is not here: the module's sweep timer deletes what has outlived keepMediaDays, so
+the lifetime has one owner and it runs even while nothing is downloaded.
 """
 
-import time
 import unicodedata
 from pathlib import Path
 
@@ -37,11 +35,10 @@ def component(name, *, fallback=FALLBACK):
 
 
 class Outbox:
-    """Where downloads land, and how long they stay."""
+    """Where downloads land."""
 
-    def __init__(self, root, *, keep_for):
+    def __init__(self, root):
         self.root = Path(root)
-        self.keep_for = keep_for
 
     def place(self, group, file_name):
         """The path a download should take, inside a subdirectory of the outbox.
@@ -57,13 +54,3 @@ class Outbox:
         directory = self.root / safe_group
         directory.mkdir(parents=True, exist_ok=True)
         return directory / component(file_name)
-
-    def sweep(self):
-        """Delete what has outlived keep_for, and return the names removed."""
-        deadline = time.time() - self.keep_for
-        removed = []
-        for path in sorted(self.root.rglob("*")):
-            if path.is_file() and path.stat().st_mtime < deadline:
-                path.unlink()
-                removed.append(path.name)
-        return removed
