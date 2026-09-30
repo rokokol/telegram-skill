@@ -11,7 +11,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import handler, permissions, server, verbs
+from . import handler, media, permissions, server, verbs
 
 
 def build_parser():
@@ -82,6 +82,13 @@ def credentials():
     return api_id, api_hash
 
 
+def build_handler(options, account):
+    """The handler the service serves, assembled from its command line."""
+    store = permissions.Store(options.permissions)
+    outbox = media.Outbox(options.media_dir) if options.media_dir else None
+    return handler.Handler(store, account, outbox=outbox)
+
+
 async def run(options):
     # Imported here so that --help works without the library installed
     from telethon import TelegramClient
@@ -115,8 +122,7 @@ async def run(options):
         )
         raise SystemExit(EX_CONFIG)
 
-    store = permissions.Store(options.permissions)
-    served = server.Server(handler.Handler(store, account))
+    served = server.Server(build_handler(options, account))
     inherited = server.inherited_socket()
     try:
         if inherited is not None:
