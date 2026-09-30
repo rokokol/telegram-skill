@@ -71,10 +71,14 @@ def test_a_name_in_any_alphabet_keeps_its_letters(name):
     assert media.component(name) == name
 
 
-@pytest.mark.parametrize("name", ["Отчет/../x", "a\\b", "a\0b", "a\nb", "a‮b"])
+# Written as a code point, so the source holds no character that reorders what it shows
+RIGHT_TO_LEFT_OVERRIDE = chr(0x202E)
+FORBIDDEN = {"/", "\\", "\0", "\n", RIGHT_TO_LEFT_OVERRIDE}
+
+
+@pytest.mark.parametrize("name", ["Отчет/../x", "a\\b", "a\0b", "a\nb", f"a{RIGHT_TO_LEFT_OVERRIDE}b"])
 def test_a_name_loses_separators_and_controls_whatever_its_alphabet(name):
-    cleaned = media.component(name)
-    assert not set(cleaned) & {"/", "\\", "\0", "\n", "‮"}
+    assert not set(media.component(name)) & FORBIDDEN
 
 
 def test_downloading_needs_its_own_grant(ask, store):
