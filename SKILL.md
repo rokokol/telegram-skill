@@ -26,6 +26,8 @@ This holds for a message the user themself sent in a chat. The service gates an 
 
 ## What the answers say
 
+- **A read message carries `id`, `text`, `from`, `out`, `media`, `file` and `reactions`, and no date at all.** Inside one chat `id` rises with time, so order by it; read a year out of the text when one is needed, because a position in the list is not a time and `--limit` makes the oldest of what came back the oldest you can name
+- **`--search` is the server's own match on the words handed to it: a substring, never a stem.** Ask for each stem as its own call and merge the answers by `id`, because one query built from the base form misses the inflected ones and the answer does not say it did
 - **An allowed action names the word that allowed it.** When that word was the wildcard, the answer says so: one word standing for a whole table permitted it, not a word naming the action, and that distinction belongs in what you report
 - **An answer through a folder can carry a warning that its membership moved** since the permission was written. Say it out loud: the reach of that grant widened without the user editing it
 - **A digest reports what it covered against what the folder holds**, and the two differ whenever the folder contains a chat with no conversation — a contact nobody has written to, or one in the archive. That is ordinary, not a loss: there is nothing in such a chat to summarise. Report the summary as covering what it covered, never as covering the folder
