@@ -58,8 +58,13 @@ def test_the_sandbox_matches_the_module():
 
 
 def test_a_session_that_is_not_signed_in_is_not_restarted():
-    assert SERVICE["RestartPreventExitStatus"] == ["78"]
+    assert "78" in SERVICE["RestartPreventExitStatus"][0].split()
     assert 'RestartPreventExitStatus = "78";' in MODULE
+
+
+def test_missing_credentials_are_not_restarted():
+    # 243 is systemd's EXIT_CREDENTIALS: the pair is absent, and only the user can add it
+    assert "243" in SERVICE["RestartPreventExitStatus"][0].split()
 
 
 def test_permissions_and_outbox_lie_outside_the_state_directory():
