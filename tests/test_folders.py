@@ -77,6 +77,63 @@ def test_a_digest_marks_nothing_read(ask, store):
     assert not ask.fake.called("send_read_acknowledge")
 
 
+@pytest.mark.parametrize("words", ["mark-read", "all"])
+def test_mark_read_reaches_only_folder_members(ask, store, words):
+    grant_folder(store, 5, words)
+    ask.fake.folders[0].pinned_peers = [888, 123]
+    answer = ask({"action": "mark-read", "folder": "5"})
+    assert answer["ok"] is True
+    assert answer["allowed_by"] == words
+    assert answer["result"]["marked"] == [123, 777, 888]
+    assert ask.fake.called("send_read_acknowledge") == [
+        {"entity": chat, "message": None} for chat in [123, 777, 888]
+    ]
+
+
+@pytest.mark.parametrize("words", ["read", "digest", "folder-read", ""])
+def test_mark_read_needs_its_own_folder_grant(ask, store, words):
+    grant_folder(store, 5, words)
+    answer = ask({"action": "mark-read", "folder": 5})
+    assert answer["ok"] is False
+    assert "mark-read" in answer["remedy"]
+    assert not ask.fake.called("send_read_acknowledge")
+
+
+def test_mark_read_on_an_empty_folder(ask, store):
+    grant_folder(store, 5, "mark-read")
+    ask.fake.folders[0].include_peers = []
+    answer = ask({"action": "mark-read", "folder": 5})
+    assert answer["ok"] is True
+    assert answer["result"]["marked"] == []
+    assert not ask.fake.called("send_read_acknowledge")
+
+
+def test_mark_read_reports_membership_drift(ask, store):
+    grant_folder(store, 5, "mark-read", extra="members: old\n")
+    answer = ask({"action": "mark-read", "folder": 5})
+    assert answer["ok"] is True
+    assert "membership changed" in answer["warning"]
+
+
+@pytest.mark.parametrize("action", ["folder-edit", "folder-create", "folder-delete"])
+def test_a_folder_granting_mark_read_cannot_widen_its_reach(ask, store, action):
+    grant_folder(store, 5, f"mark-read, {action}")
+    answer = ask({"action": action, "folder": 5, "add": [999]})
+    assert answer["ok"] is False
+    assert "grants content" in answer["error"]
+    assert not ask.fake.called("raw_update_filter")
+
+
+def test_a_folder_grants_mark_read_to_an_individual_member(ask, store):
+    grant_folder(store, 5, "mark-read")
+    answer = ask({"action": "mark-read", "chat": 777})
+    assert answer["ok"] is True
+    assert answer["through_folder"]["id"] == 5
+    assert ask.fake.called("send_read_acknowledge") == [
+        {"entity": 777, "message": None}
+    ]
+
+
 # The invariant: a folder the agent may read is a folder the agent may not fill
 def test_a_folder_that_grants_reading_refuses_to_be_edited(ask, store):
     grant_folder(store, 5, "read, folder-edit")

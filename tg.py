@@ -48,6 +48,7 @@ def build_parser():
             "  tg.py send --chat 777 --text '| a | b |' --parse-mode rich\n"
             "  tg.py send --chat 777 --file report.pdf --text 'the report'\n"
             "  tg.py digest --folder 5\n"
+            "  tg.py mark-read --folder 5\n"
             "  tg.py dialogs\n"
             "  tg.py media --chat 777 --ids 12 13\n"
         ),

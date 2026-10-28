@@ -26,13 +26,12 @@ ACCOUNT_ACTIONS = {
     "dialogs": "list every chat with its name and its unread count",
 }
 
-# What a folder's permission file can grant. A folder grants no write action on its chats.
-# Its membership changes without the agent asking. A message sent to a chat that joined
-# the folder yesterday cannot be taken back
+# Folder membership can change from another device, so folders cannot grant message writes
 FOLDER_CONTENT_ACTIONS = {
     "read": "read history of every chat currently in this folder",
     "digest": "summarise unread messages across this folder",
     "media": "download attached files from this folder into the outbox",
+    "mark-read": "mark history as read in every chat currently in this folder",
 }
 
 # Managing folders. These words cannot change which chats the agent reaches
@@ -89,7 +88,7 @@ def widens_reach(action):
 
 
 def grants_content(words):
-    """Whether these granted words let the holder read what is inside a folder."""
+    """Whether these words grant access to the chats inside a folder."""
     if WILDCARD in words:
         return True
     return any(w in FOLDER_CONTENT_ACTIONS for w in words)

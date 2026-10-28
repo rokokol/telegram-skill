@@ -404,6 +404,10 @@ class Handler:
             }
         if action == "read":
             return {"members": members}
+        if action == "mark-read":
+            for chat in members:
+                await self._client.mark_read(chat)
+            return {"marked": members}
         if action == "folder-edit":
             wanted = sorted(set(members) | set(request.get("add", [])))
             wanted = [m for m in wanted if m not in set(request.get("remove", []))]
