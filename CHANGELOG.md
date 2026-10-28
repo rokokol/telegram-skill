@@ -6,6 +6,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 ### Added
 
+- `read` includes reaction counts and the account's choices, and `read --ids` fetches specific messages. `react --id ID --reactions EMOJI...` replaces the account's emoji reactions; an empty `--reactions` removes them. Reacting requires `write`, available for chats and folders without granting message sends
 - `mark-read --folder ID` marks history read in every current member, pinned chats included, under a separate folder `mark-read` grant. The answer lists the marked chats and reports membership drift; the grant also permits marking an individual member read and prevents edits that widen the folder's reach
 
 ## 2026-10-24

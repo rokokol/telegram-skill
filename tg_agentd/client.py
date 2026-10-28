@@ -18,6 +18,7 @@ from telethon.tl.functions.messages import (
     GetFullChatRequest,
     GetRichMessageRequest,
     SendMessageRequest,
+    SendReactionRequest,
     UpdateDialogFilterRequest,
 )
 from telethon.tl.functions.users import GetFullUserRequest
@@ -25,6 +26,7 @@ from telethon.tl.types import (
     InputReplyToMessage,
     InputRichMessageMarkdown,
     MessageEntityCustomEmoji,
+    ReactionEmoji,
 )
 
 from .hub import Hub
@@ -162,6 +164,15 @@ class Client:
     async def mark_read(self, chat_id, message=None):
         """Mark history as read, which the other side can see."""
         return await self._telethon.send_read_acknowledge(chat_id, message=message)
+
+    async def react(self, chat_id, message_id, reactions):
+        return await self._telethon(
+            SendReactionRequest(
+                peer=chat_id,
+                msg_id=message_id,
+                reaction=[ReactionEmoji(emoji) for emoji in reactions],
+            )
+        )
 
     async def me(self):
         """The account's own User."""

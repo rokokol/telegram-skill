@@ -34,6 +34,7 @@ This holds for a message the user themself sent in a chat. The service gates an 
 
 ## Before writing into a chat
 
+- **Reactions are writes too.** `read` includes reaction counts and the account's choices; setting or removing emoji reactions takes `write`, including when granted by a folder. A reaction replaces the account's current choices, so preserve any choices the user wants to keep; use `tg.py --help` for the call
 - **Say what will be sent and where, in the user's own words, before sending it.** The service allows it; that is not the same as the user wanting this text in that chat right now
 - **Prefer `reply` over `send` when answering a specific message**, so the thread stays readable to the person on the other side
 - **Text is marked up, Telethon's Markdown unless `--parse-mode` names another.** `**bold**` and `` `code` `` arrive formatted, so text meant literally goes with `--parse-mode none`; `tg.py --help` names every mode

@@ -9,7 +9,8 @@ A word outside these tables is a refusal, never a silent pass.
 # consequences of a broad one: "read" never implies "media", and "send" never implies
 # "forward" or "mark-read"
 CHAT_ACTIONS = {
-    "read": "read message history",
+    "read": "read message history, including reactions and the account's choices",
+    "write": "set or remove the account's emoji reactions with react; not send or reply",
     "media": "download attached files into the outbox",
     "send": "send a new message, a file included",
     "reply": "reply to a message, a file included",
@@ -26,9 +27,10 @@ ACCOUNT_ACTIONS = {
     "dialogs": "list every chat with its name and its unread count",
 }
 
-# Folder membership can change from another device, so folders cannot grant message writes
+# Folder membership can change from another device, so folders cannot grant message sends
 FOLDER_CONTENT_ACTIONS = {
-    "read": "read history of every chat currently in this folder",
+    "read": "read history and reactions of every chat currently in this folder",
+    "write": "set or remove emoji reactions in every chat currently in this folder",
     "digest": "summarise unread messages across this folder",
     "media": "download attached files from this folder into the outbox",
     "mark-read": "mark history as read in every chat currently in this folder",

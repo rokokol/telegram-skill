@@ -44,13 +44,15 @@ A `members` fingerprint is never taken from a default, since membership differs 
 
 So every answer permitted by `all` says so, and a survey of what is held lists it expanded. Neither is a warning about the grant; both keep its reach visible
 
-## Folders grant content access, never message writes
+## Reactions and folder content access
 
-A folder's membership changes from any device, without the service being asked. That is what makes a folder worth granting reading on, and what makes writing through one impossible to offer: a message sent to a chat that joined yesterday cannot be recalled
+`read` includes reaction counts and the account's chosen reactions on each returned message. Use `read --ids` to fetch specific messages. `write` permits `react` to replace or remove the account's emoji reactions; it does not grant `send`, `reply` or reading. Paid reactions are read-only through this interface
+
+A folder's `read` or `write` grants the corresponding access to its current member chats, pinned chats included. Target a member chat when reacting; the answer names the folder that allowed it. Membership can change from any device, so this also covers chats added later. Folders do not grant sending messages
 
 `mark-read` is a separate folder grant: it marks history read in every current member, pinned chats included, and the other side can see the read receipt. `read` and `digest` never imply it. The answer lists the affected chats under `marked`
 
-The same property forces one refusal. A folder whose `allow` holds `read`, `digest`, `media` or `mark-read` refuses `folder-edit`, `folder-create` and `folder-delete`, even when its own file lists them. Without that refusal the agent adds a chat to a folder and reaches a chat nobody granted it. A folder that grants only renaming or reordering has no such reach and stays editable
+The same property forces one refusal. A folder whose `allow` holds `read`, `write`, `digest`, `media` or `mark-read` refuses `folder-edit`, `folder-create` and `folder-delete`, even when its own file lists them. Without that refusal the agent adds a chat to a folder and reaches a chat nobody granted it. A folder that grants only renaming or reordering has no such reach and stays editable
 
 ## Turning a refusal into a permission
 

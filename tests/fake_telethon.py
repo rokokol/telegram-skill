@@ -189,6 +189,11 @@ class FakeClient:
         self._record("raw", request=name, offline=getattr(request, "offline", None))
         if name == "GetDialogFiltersRequest":
             return _Filters(list(self.folders))
+        if name == "SendReactionRequest":
+            self._record(
+                "raw_reaction", peer=request.peer, msg_id=request.msg_id,
+                reactions=[reaction.emoticon for reaction in request.reaction],
+            )
         if name == "GetForumTopicsRequest":
             return _Topics(list(self.topics))
         if name == "UpdateDialogFilterRequest":

@@ -20,7 +20,7 @@ from .hub import FellBehind
 
 # Actions that are not permissions of their own, and the permission each one takes.
 # Describing a chat's other party is reading about them, so it takes what reading does
-REQUIRES = {"topics": "read", "chat-info": "read"}
+REQUIRES = {"topics": "read", "chat-info": "read", "react": "write"}
 
 # The name a request may give the account's saved messages in place of their identifier
 SAVED = "saved"
@@ -214,9 +214,8 @@ class Handler:
     async def _folder_covering(self, chat, action):
         """A granted folder holding this chat, or None.
 
-        Only the actions a folder may grant are looked for. A folder never lends a write
-        action, whatever its own file says, because its membership moves without anyone
-        here being told.
+        Only the actions a folder may grant are looked for. Reaction writes can follow
+        membership, but sending messages still needs a chat grant.
         """
         if action not in verbs.FOLDER_CONTENT_ACTIONS:
             return None
@@ -290,6 +289,8 @@ class Handler:
             # A search term goes to the server, which answers with the matches alone.
             # Filtering here would mean reading a whole history to find one message
             terms = {}
+            if "ids" in request:
+                terms["ids"] = request["ids"]
             if request.get("search"):
                 terms["search"] = request["search"]
             # A forum keeps its messages inside topics, and one topic is one conversation
@@ -303,6 +304,17 @@ class Handler:
                 chat, limit=request.get("limit"), **terms
             )
             return [_message(m) for m in messages]
+        if action == "react":
+            message_id = request.get("id")
+            reactions = request.get("reactions")
+            if type(message_id) is not int or message_id <= 0:
+                raise ValueError("react needs a positive message id")
+            if not isinstance(reactions, list) or any(
+                not isinstance(emoji, str) or not emoji.strip() for emoji in reactions
+            ):
+                raise ValueError("react needs a reactions list; use [] to remove reactions")
+            await self._client.react(chat, message_id, reactions)
+            return None
         if action in ("send", "reply"):
             markup = await self._markup(request)
             if request.get("file") and markup == RICH:
@@ -533,7 +545,29 @@ def _message(message):
         "media": _media_kind(message),
         # The name a document will be downloaded under, so it can be chosen by name
         "file": getattr(getattr(message, "file", None), "name", None),
+        "reactions": _reactions(message),
     }
+
+
+def _reactions(message):
+    result = []
+    for counted in getattr(getattr(message, "reactions", None), "results", []):
+        reaction = counted.reaction
+        kind = type(reaction).__name__
+        if kind == "ReactionEmoji":
+            value = {"emoji": reaction.emoticon}
+        elif kind == "ReactionCustomEmoji":
+            value = {"custom_emoji_id": reaction.document_id}
+        elif kind == "ReactionPaid":
+            value = {"paid": True}
+        else:
+            continue
+        result.append({
+            **value,
+            "count": counted.count,
+            "chosen": getattr(counted, "chosen_order", None) is not None,
+        })
+    return result
 
 
 def _allowed(by, action, result):

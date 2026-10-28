@@ -43,6 +43,9 @@ def build_parser():
             "  tg.py whoami\n"
             "  tg.py chat-info --chat 777\n"
             "  tg.py read --chat -1001234567890 --limit 20\n"
+            "  tg.py read --chat 777 --ids 12\n"
+            "  tg.py react --chat 777 --id 12 --reactions '👍'\n"
+            "  tg.py react --chat 777 --id 12 --reactions\n"
             "  tg.py send --chat 777 --text 'on my way'\n"
             "  tg.py send --chat 777 --text '**done**, see `out.csv`'\n"
             "  tg.py send --chat 777 --text '| a | b |' --parse-mode rich\n"
@@ -57,7 +60,8 @@ def build_parser():
     parser.add_argument(
         "action",
         help="the action to ask for; 'permissions' lists what is held, 'whoami' describes "
-        "the account, 'chat-info' the other side of a chat under its read grant",
+        "the account, 'chat-info' the other side of a chat under its read grant; "
+        "'read' includes reaction counts and choices, 'react' sets reactions under write",
     )
     parser.add_argument(
         "--chat",
@@ -79,8 +83,12 @@ def build_parser():
         help="a file to send with send or reply; this client reads it and the service never opens a path",
     )
     parser.add_argument("--reply-to", type=int, help="the message this one answers")
-    parser.add_argument("--id", type=int, help="one message identifier, for edit")
+    parser.add_argument("--id", type=int, help="one message identifier, for edit or react")
     parser.add_argument("--ids", type=int, nargs="+", help="message identifiers")
+    parser.add_argument(
+        "--reactions", nargs="*",
+        help="emoji reactions for react, replacing the account's choices; no values removes them",
+    )
     parser.add_argument("--add", type=int, nargs="+", help="chats to add, for folder-edit")
     parser.add_argument("--remove", type=int, nargs="+", help="chats to remove, for folder-edit")
     parser.add_argument("--limit", type=int, help="how many messages to read")
@@ -114,6 +122,7 @@ def request_from(options):
         "reply_to": options.reply_to,
         "id": options.id,
         "ids": options.ids,
+        "reactions": options.reactions,
         "add": options.add,
         "remove": options.remove,
         "limit": options.limit,
