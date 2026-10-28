@@ -1,0 +1,18 @@
+post_install() {
+  systemd-tmpfiles --create tg-agent.conf
+  cat <<'EOF'
+tg-agent: three steps remain, and each is yours rather than the package's
+  1. put the api pair from my.telegram.org in /etc/tg-agent/api_id and
+     /etc/tg-agent/api_hash, owned by root and readable by nobody else
+  2. name who may use the socket: systemctl edit tg-agent.socket, then
+     [Socket]
+     SocketUser=you
+  3. sudo tg-agent-login --qr, then
+     systemctl enable --now tg-agent.socket tg-agent-sweep.timer
+Permission files go in /var/lib/tg-agent-permissions; the skill is in /usr/share/tg-agent/skill
+EOF
+}
+
+post_upgrade() {
+  systemd-tmpfiles --create tg-agent.conf
+}

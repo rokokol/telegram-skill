@@ -1,0 +1,11 @@
+# A timer rather than a thread inside the service, so an outbox whose files have outlived
+# their time is emptied even while nothing is being downloaded
+[Unit]
+Description=Remove downloads that have outlived their keep time
+
+[Timer]
+OnCalendar=daily
+Persistent=yes
+
+[Install]
+WantedBy=timers.target

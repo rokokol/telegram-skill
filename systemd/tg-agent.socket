@@ -1,0 +1,17 @@
+# Who may talk to the service is the socket's owner, and systemd sets it, because a service
+# under a dynamic identifier cannot usefully set it for a named user. Name that user in a
+# drop-in rather than here:
+#   systemctl edit tg-agent.socket
+#   [Socket]
+#   SocketUser=you
+# Left as it is, only root can talk to the socket
+[Unit]
+Description=Socket for the Telegram agent service
+
+[Socket]
+ListenStream=/run/tg-agent/socket
+SocketUser=root
+SocketMode=0600
+
+[Install]
+WantedBy=sockets.target

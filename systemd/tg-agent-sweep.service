@@ -1,0 +1,8 @@
+[Unit]
+Description=Remove downloads that have outlived their keep time
+
+[Service]
+Type=oneshot
+# Seven days, as the module's keepMediaDays. Without a limit the outbox becomes a
+# permanent copy of every attachment ever read
+ExecStart=/usr/bin/find /var/lib/tg-agent-outbox -type f -mtime +7 -delete
