@@ -302,7 +302,13 @@ class Handler:
             messages = await self._client.history(
                 chat, limit=request.get("limit"), **terms
             )
-            return [_message(m) for m in messages]
+            read = []
+            for message in messages:
+                answer = _message(message)
+                if (answer.get("poll") or {}).get("public"):
+                    await self._voters(chat, message, answer["poll"])
+                read.append(answer)
+            return read
         if action in ("send", "reply"):
             markup = await self._markup(request)
             if request.get("file") and markup == RICH:
@@ -359,6 +365,35 @@ class Handler:
             return await self._download(chat, request.get("ids", []))
         raise permissions.UnknownAction(f"no handler for {action!r}")
 
+
+    async def _voters(self, chat, message, poll):
+        """Name who chose each answer of a poll whose voters are public.
+
+        The counts are in the message already; the names are one more request, made only
+        for such a poll, and a refusal of it leaves the counts standing rather than failing
+        the whole read.
+        """
+        try:
+            answer = await self._client.poll_votes(chat, message.id)
+        except Exception as refused:
+            poll["voters_error"] = f"{type(refused).__name__}: {refused}"
+            return
+        names = {
+            getattr(user, "id", None): _display_name(user)
+            for user in getattr(answer, "users", None) or []
+        }
+        by_option = {held["option"]: held for held in poll["answers"]}
+        for vote in getattr(answer, "votes", None) or []:
+            voter = folders._identifier(getattr(vote, "peer", None))
+            chosen = getattr(vote, "options", None) or [getattr(vote, "option", None)]
+            for option in chosen:
+                if option is None:
+                    continue
+                held = by_option.get(option.hex())
+                if held is not None:
+                    held.setdefault("voters", []).append(
+                        names.get(voter) or str(voter)
+                    )
 
     async def _folder(self, request, action):
         """Answer a folder request, reporting membership that moved since the grant."""
@@ -497,8 +532,21 @@ def _upload(attached):
 
 # The kinds Telethon exposes as named attributes, most specific first: a sticker and a
 # voice note are both documents, and calling either one a document says the less useful
-# of the two true things
-MEDIA_KINDS = ("sticker", "voice", "photo", "video", "audio", "document")
+# of the two true things. A round video is a video note to Telethon, and called what a
+# reader sees
+MEDIA_KINDS = (
+    ("poll", "poll"),
+    ("sticker", "sticker"),
+    ("voice", "voice"),
+    ("round", "video_note"),
+    ("photo", "photo"),
+    ("video", "video"),
+    ("audio", "audio"),
+    ("document", "document"),
+)
+
+# Kinds whose length is worth knowing before deciding to download them
+TIMED = ("voice", "round", "video", "audio")
 
 
 def _media_kind(message):
@@ -507,10 +555,90 @@ def _media_kind(message):
     Without this a sticker, a photo and a voice note are one blank line each, and a
     summary of a chat drops everything nobody typed.
     """
-    for kind in MEDIA_KINDS:
-        if getattr(message, kind, None) is not None:
+    for kind, attribute in MEDIA_KINDS:
+        if getattr(message, attribute, None) is not None:
             return kind
     return None
+
+
+def _text_of(value):
+    """Plain text from a field that newer layers wrap with its entities."""
+    return getattr(value, "text", value) if value is not None else ""
+
+
+def _display_name(entity):
+    """What a chat shows for a person or a chat, without asking the server."""
+    if entity is None:
+        return None
+    title = getattr(entity, "title", None)
+    if title:
+        return title
+    name = " ".join(
+        part
+        for part in (
+            getattr(entity, "first_name", None),
+            getattr(entity, "last_name", None),
+        )
+        if part
+    )
+    return name or getattr(entity, "username", None) or None
+
+
+def _answered(message):
+    """The message this one answers, apart from the topic it is merely posted in.
+
+    A message in a forum topic replies to the topic itself, which is where it is rather
+    than what it answers; one answering another message there names the topic as its top.
+    """
+    header = getattr(message, "reply_to", None)
+    if header is None:
+        return None
+    in_topic = getattr(header, "forum_topic", None)
+    if in_topic and not getattr(header, "reply_to_top_id", None):
+        return None
+    return getattr(header, "reply_to_msg_id", None)
+
+
+def _forwarded(message):
+    """Who a forwarded message came from: the name it carries, else the peer it names."""
+    header = getattr(message, "fwd_from", None)
+    if header is None:
+        return None
+    if getattr(header, "from_name", None):
+        return header.from_name
+    peer = getattr(header, "from_id", None)
+    return folders._identifier(peer) if peer is not None else "hidden"
+
+
+def _poll(message):
+    """A poll's question, answers and counts, as the message already holds them.
+
+    The voters' names are a separate request, so `public` says whether one can be made.
+    """
+    media = getattr(message, "poll", None)
+    poll = getattr(media, "poll", None)
+    if poll is None:
+        return None
+    results = getattr(media, "results", None)
+    counts = {
+        bytes(r.option): getattr(r, "voters", 0) or 0
+        for r in (getattr(results, "results", None) or [])
+    }
+    return {
+        "question": _text_of(getattr(poll, "question", None)),
+        "answers": [
+            {
+                "option": bytes(a.option).hex(),
+                "text": _text_of(getattr(a, "text", None)),
+                "votes": counts.get(bytes(a.option), 0),
+            }
+            for a in getattr(poll, "answers", None) or []
+        ],
+        "total": getattr(results, "total_voters", 0) or 0,
+        "public": bool(getattr(poll, "public_voters", False)),
+        "multiple": bool(getattr(poll, "multiple_choice", False)),
+        "closed": bool(getattr(poll, "closed", False)),
+    }
 
 
 def _message(message):
@@ -519,17 +647,30 @@ def _message(message):
     # A rich message keeps its content in blocks and its text empty, so the blocks are
     # what the text is
     content = getattr(message, "rich_message", None)
-    return {
+    kind = _media_kind(message)
+    date = getattr(message, "date", None)
+    answer = {
         "id": getattr(message, "id", None),
+        # When it was written: a summary that cannot say when is a list of sentences
+        "date": date.isoformat() if date is not None else None,
         "text": rich.to_markdown(content)
         if content is not None
         else getattr(message, "text", ""),
         "from": getattr(message, "sender_id", None),
+        # The name the chat shows, from the sender Telethon already holds: no request
+        "from_name": _display_name(getattr(message, "sender", None)),
         "out": getattr(message, "out", False),
-        "media": _media_kind(message),
+        "reply_to": _answered(message),
+        "forwarded_from": _forwarded(message),
+        "media": kind,
         # The name a document will be downloaded under, so it can be chosen by name
         "file": getattr(getattr(message, "file", None), "name", None),
     }
+    if kind in TIMED:
+        answer["duration"] = getattr(getattr(message, "file", None), "duration", None)
+    if kind == "poll":
+        answer["poll"] = _poll(message)
+    return answer
 
 
 def _allowed(by, action, result):

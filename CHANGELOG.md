@@ -2,6 +2,13 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what everyone already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-10-28
+
+### Added
+
+- A message read carries its `date`, the sender's `from_name`, the message it answers as `reply_to`, where a forward came from as `forwarded_from`, and the `duration` of a voice note, a round video, a video or an audio file. A summary without them is sentences with no speaker and no time
+- A poll reads as its question, answers, counts and total, and a poll whose voters are public names who chose each answer. A round video reads as `round` rather than as a video
+
 ## 2026-10-24
 
 ### Added

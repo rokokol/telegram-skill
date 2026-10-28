@@ -16,6 +16,7 @@ from telethon.tl.functions.messages import (
     GetDialogFiltersRequest,
     GetForumTopicsRequest,
     GetFullChatRequest,
+    GetPollVotesRequest,
     GetRichMessageRequest,
     SendMessageRequest,
     UpdateDialogFilterRequest,
@@ -150,6 +151,17 @@ class Client:
             if whole and whole[0].rich_message is not None:
                 message.rich_message = whole[0].rich_message
         return message
+
+    async def poll_votes(self, chat_id, message_id, limit=100):
+        """Who chose what in a poll that shows its voters.
+
+        A poll's results carry counts alone; the names are a separate request, which the
+        server answers only for a poll whose voters are public. Asking reads the poll and
+        votes in nothing.
+        """
+        return await self._telethon(
+            GetPollVotesRequest(peer=chat_id, id=message_id, limit=limit)
+        )
 
     async def dialogs(self, **kwargs):
         """Every dialog the account has, unread counts included.

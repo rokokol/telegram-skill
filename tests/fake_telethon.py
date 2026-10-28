@@ -84,6 +84,16 @@ class Message:
     rich_message: object = None
     # A MessageReplyHeader, which also says which forum topic the message is in
     reply_to: object = None
+    # A datetime, as Telethon gives it
+    date: object = None
+    # The sender Telethon resolved alongside the message: a User, Chat or Channel
+    sender: object = None
+    # A MessageFwdHeader on a forwarded message
+    fwd_from: object = None
+    # A MessageMediaPoll, whose poll and results hold the question and the counts
+    poll: object = None
+    # A round video, which Telethon calls a video note
+    video_note: object = None
 
 
 @dataclass
@@ -126,8 +136,11 @@ class FakeClient:
         premium=False,
         full_rich=None,
         entities=None,
+        poll_votes=None,
     ):
         self.calls = []
+        # What a request for a poll's voters answers, by message id
+        self.poll_votes = poll_votes or {}
         self.premium = premium
         # What get_entity answers for each identifier
         self.entities = entities or {}
@@ -210,6 +223,9 @@ class FakeClient:
             self._record("raw_full", request=name)
             entity = next(e for e in self.entities.values() if e.id == request.chat_id)
             return _FullAnswer(full_chat=_Full(entity.about, entity.participants_count))
+        if name == "GetPollVotesRequest":
+            self._record("raw_poll_votes", peer=request.peer, id=request.id)
+            return self.poll_votes[request.id]
         if name == "GetRichMessageRequest":
             self._record("raw_get_rich", peer=request.peer, id=request.id)
             whole = self.full_rich.get(request.id)
