@@ -470,8 +470,8 @@ defect 'push/bound' 'tg_agentd/hub.py' \
 
 # Profiles. The other party of a chat is described under the grant that reads the chat
 defect 'info/grant' 'tg_agentd/handler.py' \
-  'REQUIRES = {"topics": "read", "chat-info": "read"}' \
-  'REQUIRES = {"topics": "read", "chat-info": "send"}' \
+  '"chat-info": "read"' \
+  '"chat-info": "send"' \
   'a chat the agent may only write into tells it the phone number, the bio and the last-seen time of the person there'
 
 defect 'info/remedy' 'tg_agentd/handler.py' \
