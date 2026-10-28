@@ -1,0 +1,42 @@
+# The unit nix/module.nix writes, for a system without Nix. The isolation lives here:
+# DynamicUser puts the session under /var/lib/private and the credentials in a namespace no
+# other process shares, and the socket is the only way in. Keep the two in step;
+# tests/test_units.py holds this file to the module's guarantees
+[Unit]
+Description=Telegram agent service
+Requires=tg-agent.socket
+After=network-online.target tg-agent.socket
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/bin/tg-agentd --permissions /var/lib/tg-agent-permissions --media-dir /var/lib/tg-agent-outbox --device tg-agentd
+
+# The whole reason this is a unit rather than a script. systemd reads both files before
+# the service drops to its dynamic identifier, so they stay root's and nobody else's
+DynamicUser=yes
+LoadCredential=api_id:/etc/tg-agent/api_id
+LoadCredential=api_hash:/etc/tg-agent/api_hash
+StateDirectory=tg-agent
+
+# The outbox is the one path outside the namespace the service may write
+ReadWritePaths=/var/lib/tg-agent-outbox
+SupplementaryGroups=users
+UMask=0022
+
+PrivateMounts=yes
+PrivateDevices=yes
+ProtectHome=yes
+ProtectSystem=strict
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+NoNewPrivileges=yes
+Restart=on-failure
+RestartSec=10s
+# 78 is the service saying its session is not signed in. The login is interactive, so a
+# restart cannot fix it, and without this the unit wakes every ten seconds for as long as
+# the machine is up. 243 is systemd saying a credential file is missing: on a system without
+# Nix nothing guarantees /etc/tg-agent holds the pair before the socket is first used, and a
+# restart cannot write it either
+RestartPreventExitStatus=78 243

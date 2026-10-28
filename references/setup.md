@@ -10,6 +10,8 @@
 - **A permissions directory**, given with `--permissions`, which the service only reads
 - **An outbox**, given with `--media-dir`, which is the only place a download may land
 
+The NixOS module writes this unit from its options. Without Nix, `systemd/` holds the same unit as files with fixed paths: the api pair in `/etc/tg-agent/api_id` and `/etc/tg-agent/api_hash`, owned by root with mode 600, the permission files in `/var/lib/tg-agent-permissions`, and the outbox in `/var/lib/tg-agent-outbox`. Who may use the socket is a drop-in, `systemctl edit tg-agent.socket` with `SocketUser=` under `[Socket]`, because until one names a user only root can reach it
+
 ## The api pair
 
 The pair comes from [my.telegram.org](https://my.telegram.org), under API development tools. One application per phone number, and the form validates on the server without naming the field it rejected: a short name shorter than five characters, a URL it dislikes or a platform left unselected all return the same blank error
@@ -20,7 +22,7 @@ The pair cannot be rotated. Telegram issues one per number and documents no rese
 
 Signing in is interactive by definition: Telegram sends a code to the account, and an account with two-step verification also needs its password. It also has to write the session into the same state directory the service reads, which under `DynamicUser` sits inside `/var/lib/private` and is closed to everyone
 
-So the login runs as the service runs, through systemd, with a terminal attached. The module ships `tg-agent-login` for exactly that, and it needs root because it starts a transient unit:
+So the login runs as the service runs, through systemd, with a terminal attached. The module, and `systemd/` for a system without Nix, ships `tg-agent-login` for exactly that, and it needs root because it starts a transient unit:
 
 ```bash
 sudo tg-agent-login

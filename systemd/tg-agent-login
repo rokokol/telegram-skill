@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# The first login, as nix/module.nix ships it. The session has to land in the state
+# directory the service reads, which under DynamicUser is inside /var/lib/private where no
+# one can go, so the login runs as the service does: through systemd, with a terminal
+# attached. Arguments pass through, so --qr reaches the service
+set -euo pipefail
+
+if [ "$(id -u)" -ne 0 ]; then
+  echo "tg-agent-login: run this with sudo — it starts a transient unit" >&2
+  exit 1
+fi
+
+for credential in api_id api_hash; do
+  if [ ! -s "/etc/tg-agent/$credential" ]; then
+    echo "tg-agent-login: /etc/tg-agent/$credential is missing or empty; references/setup.md says what goes there" >&2
+    exit 1
+  fi
+done
+
+# A login left open by an earlier attempt keeps the unit name, and systemd-run refuses to
+# start a transient unit that is still loaded
+systemctl stop tg-agent-login.service 2>/dev/null || true
+systemctl reset-failed tg-agent-login.service 2>/dev/null || true
+exec systemd-run --pty --wait --collect --quiet \
+  --unit=tg-agent-login \
+  --property=DynamicUser=yes \
+  --property=StateDirectory=tg-agent \
+  --property=LoadCredential=api_id:/etc/tg-agent/api_id \
+  --property=LoadCredential=api_hash:/etc/tg-agent/api_hash \
+  /usr/bin/tg-agentd \
+  --permissions /var/lib/tg-agent-permissions \
+  --device tg-agentd \
+  --login "$@"

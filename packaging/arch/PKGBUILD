@@ -1,0 +1,52 @@
+# The service half for Arch Linux, with the units from systemd/ in place of the NixOS module.
+# python-telethon and python-cryptg come from the AUR, so build it with an AUR helper or
+# install those two first:
+#   makepkg -si
+pkgname=tg-agent-git
+pkgver=r0
+pkgrel=1
+pkgdesc="Serve a Telegram account over a unix socket under per-chat permissions"
+arch=(any)
+url="https://github.com/rokokol/telegram-skill"
+license=(MIT)
+depends=(python python-telethon python-cryptg python-qrcode systemd)
+makedepends=(git python-build python-installer python-setuptools python-wheel)
+provides=(tg-agent)
+conflicts=(tg-agent)
+install=tg-agent.install
+source=("telegram-skill::git+https://github.com/rokokol/telegram-skill.git")
+sha256sums=(SKIP)
+
+pkgver() {
+  cd telegram-skill
+  # A skill is read at whatever revision is checked out, so the revision is the version
+  printf 'r%s.%s' "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+  cd telegram-skill
+  python -m build --wheel --no-isolation
+}
+
+package() {
+  cd telegram-skill
+  python -m installer --destdir="$pkgdir" dist/*.whl
+
+  install -Dm644 systemd/tg-agent.service "$pkgdir/usr/lib/systemd/system/tg-agent.service"
+  install -Dm644 systemd/tg-agent.socket "$pkgdir/usr/lib/systemd/system/tg-agent.socket"
+  install -Dm644 systemd/tg-agent-sweep.service "$pkgdir/usr/lib/systemd/system/tg-agent-sweep.service"
+  install -Dm644 systemd/tg-agent-sweep.timer "$pkgdir/usr/lib/systemd/system/tg-agent-sweep.timer"
+  install -Dm644 systemd/tg-agent.tmpfiles "$pkgdir/usr/lib/tmpfiles.d/tg-agent.conf"
+  install -Dm755 systemd/tg-agent-login "$pkgdir/usr/bin/tg-agent-login"
+
+  # What an agent loads, at the revision of the service it talks to, as the module's
+  # skill option does: tests, checks and packaging stay out
+  local skill="$pkgdir/usr/share/tg-agent/skill"
+  install -Dm644 SKILL.md "$skill/SKILL.md"
+  install -Dm755 tg.py "$skill/tg.py"
+  install -Dm755 tg-watch.py "$skill/tg-watch.py"
+  install -Dm644 agentsock.py "$skill/agentsock.py"
+  install -Dm644 -t "$skill/references" references/*.md
+
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

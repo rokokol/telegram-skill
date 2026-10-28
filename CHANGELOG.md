@@ -2,6 +2,13 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what everyone already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-10-28
+
+### Added
+
+- `systemd/` holds the unit, its socket, the outbox sweep, the tmpfiles rules and `tg-agent-login` as plain files, for a system with systemd and no Nix. `tests/test_units.py` holds them to the module's isolation: a dynamic user, credentials loaded by systemd, the same sandbox, no restart of a session that is not signed in, and permissions and outbox outside the state directory
+- `packaging/arch/PKGBUILD` installs the service, those units and the skill on Arch Linux
+
 ## 2026-10-24
 
 ### Added

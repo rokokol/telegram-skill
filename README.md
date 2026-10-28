@@ -9,6 +9,7 @@
 ![Telethon](https://img.shields.io/badge/Telethon-2CA5E0?style=flat&logo=telegram&logoColor=white)
 ![systemd](https://img.shields.io/badge/systemd-30D475?style=flat&logo=systemd&logoColor=white)
 ![Nix](https://img.shields.io/badge/Nix-5277C3?style=flat&logo=nixos&logoColor=white)
+![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?style=flat&logo=archlinux&logoColor=white)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![ci](https://github.com/rokokol/telegram-skill/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/telegram-skill/actions/workflows/build.yml)
 [![falsify](https://github.com/rokokol/telegram-skill/actions/workflows/falsify.yml/badge.svg)](https://github.com/rokokol/telegram-skill/actions/workflows/falsify.yml)
@@ -53,6 +54,20 @@ services.tg-agent = {
 ```
 
 The module is where the isolation lives — `DynamicUser`, credentials read before the service drops its privileges, the session under `/var/lib/private` — so it ships here rather than being written again by everyone who runs it. `references/setup.md` says what it provides and why
+
+On Arch Linux, or any distribution with systemd and no Nix, the same unit ships as plain files in `systemd/`, and `packaging/arch/PKGBUILD` installs them with the service. `python-telethon` and `python-cryptg` come from the AUR, so build it with an AUR helper or install those two first:
+
+```bash
+cd packaging/arch && makepkg -si
+sudoedit /etc/tg-agent/api_id      # the number, and nothing else
+sudoedit /etc/tg-agent/api_hash
+sudo chmod 600 /etc/tg-agent/api_id /etc/tg-agent/api_hash
+sudo systemctl edit tg-agent.socket    # [Socket] SocketUser=you
+sudo tg-agent-login --qr
+sudo systemctl enable --now tg-agent.socket tg-agent-sweep.timer
+```
+
+The skill lands in `/usr/share/tg-agent/skill`, at the revision of the service it talks to. On another distribution, copy the files from `systemd/` to the paths the PKGBUILD names: the unit expects `tg-agentd` in `/usr/bin` and the api pair in `/etc/tg-agent`
 
 ## How it is arranged
 
