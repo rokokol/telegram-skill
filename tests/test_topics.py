@@ -14,23 +14,21 @@ class _FakeStatusRequest:
         self.offline = offline
 
 
+CHAT = -1002303572307
+
+
 @pytest.fixture
 def store(tmp_path):
     (tmp_path / "chats").mkdir()
     (tmp_path / "folders").mkdir()
-    (tmp_path / "chats" / "-1002303572307.conf").write_text("allow: read\n")
+    (tmp_path / "chats" / f"{CHAT}.conf").write_text("allow: read, mark-read\n")
     return permissions.Store(tmp_path)
 
 
-@pytest.fixture
-def ask(store, monkeypatch):
-    monkeypatch.setattr(client_module, "UpdateStatusRequest", _FakeStatusRequest)
+def serve(store, **fake):
+    """A handler over a stand-in holding one forum, and the calls it made."""
     fake = FakeClient(
-        messages={-1002303572307: [Message(id=1, text="in a topic", sender_id=9)]},
-        topics=[
-            FakeTopic(id=1, title="General", unread_count=0),
-            FakeTopic(id=17, title="Work", unread_count=4),
-        ],
+        messages={CHAT: [Message(id=1, text="in a topic", sender_id=9)]}, **fake
     )
     served = handler.Handler(store, client_module.Client(fake))
 
@@ -39,6 +37,18 @@ def ask(store, monkeypatch):
 
     call.fake = fake
     return call
+
+
+@pytest.fixture
+def ask(store, monkeypatch):
+    monkeypatch.setattr(client_module, "UpdateStatusRequest", _FakeStatusRequest)
+    return serve(
+        store,
+        topics=[
+            FakeTopic(id=1, title="General", unread_count=0),
+            FakeTopic(id=17, title="Work", unread_count=4, top_message=967),
+        ],
+    )
 
 
 # A forum's messages all sit in topics, so reading it without naming one returns every
@@ -76,6 +86,112 @@ def test_a_search_inside_one_topic_stays_inside_it(ask):
     call = ask.fake.called("get_messages")[0]
     assert call["reply_to"] == 17
     assert call["search"] == "x"
+
+
+# A topic is known by its name in the app and by its number nowhere, so a read that
+# names a title must reach the same topic a number does
+def test_a_topic_can_be_read_by_its_title(ask):
+    answer = ask({"action": "read", "chat": CHAT, "topic": "Work"})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("get_messages")[0]["reply_to"] == 17
+
+
+def test_a_title_matches_whatever_its_case(ask):
+    answer = ask({"action": "read", "chat": CHAT, "topic": "wOrK"})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("get_messages")[0]["reply_to"] == 17
+
+
+# A number is an identifier rather than a title, so a read by number costs no extra
+# request: the list of topics is only there to turn a title into one
+def test_a_topic_read_by_number_asks_for_no_topic_list(ask):
+    ask({"action": "read", "chat": CHAT, "topic": 17})
+    listed = [
+        called
+        for called in ask.fake.called("raw")
+        if called["request"] == "GetForumTopicsRequest"
+    ]
+    assert listed == []
+
+
+def test_a_title_the_forum_lacks_is_refused_whole(ask):
+    answer = ask({"action": "read", "chat": CHAT, "topic": "Play"})
+    assert answer["ok"] is False
+    assert "no topic titled" in answer["error"]
+    assert "ValueError" not in answer["error"]
+
+
+def test_a_title_two_topics_share_is_refused_by_number(store):
+    ask = serve(
+        store,
+        topics=[
+            FakeTopic(id=17, title="Work", unread_count=4, top_message=967),
+            FakeTopic(id=23, title="Work", unread_count=1, top_message=41),
+        ],
+    )
+    answer = ask({"action": "read", "chat": CHAT, "topic": "Work"})
+    assert answer["ok"] is False
+    assert "17" in answer["error"] and "23" in answer["error"]
+    assert not ask.fake.called("get_messages")
+
+
+# The counter a channel-wide read leaves standing belongs to the topic, so the call that
+# moves it names the topic as a thread and the last message read inside it
+def test_marking_a_topic_read_names_the_topic_as_a_thread(ask):
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 17})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("raw_topic_read") == [
+        {"peer": CHAT, "msg_id": 17, "read_max_id": 967}
+    ]
+    assert not ask.fake.called("send_read_acknowledge")
+    assert answer["result"]["read_max_id"] == 967
+
+
+def test_marking_a_topic_read_takes_the_topic_by_title(ask):
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": "Work"})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("raw_topic_read")[0]["msg_id"] == 17
+
+
+def test_marking_a_topic_read_can_stop_at_one_message(ask):
+    ask({"action": "mark-read", "chat": CHAT, "topic": 17, "id": 900})
+    assert ask.fake.called("raw_topic_read")[0]["read_max_id"] == 900
+
+
+# General carries no forum header, so it is the chat's own read position rather than a
+# thread of its own
+def test_the_general_topic_moves_the_chats_own_read_position(ask):
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 1})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("send_read_acknowledge")
+    assert not ask.fake.called("raw_topic_read")
+    assert answer["result"]["general"] is True
+
+
+def test_marking_a_topic_read_needs_mark_read(ask, store):
+    (store.root / "chats" / f"{CHAT}.conf").write_text("allow: read\n")
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 17})
+    assert answer["ok"] is False
+    assert "mark-read" in answer["remedy"]
+    assert not ask.fake.called("raw_topic_read")
+
+
+def test_a_topic_holding_no_message_is_refused(store):
+    ask = serve(store, topics=[FakeTopic(id=17, title="Empty", unread_count=0)])
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 17})
+    assert answer["ok"] is False
+    assert "holds no message" in answer["error"]
+    assert not ask.fake.called("raw_topic_read")
+
+
+def test_a_topic_of_a_chat_that_is_no_forum_says_so(ask, monkeypatch):
+    async def not_a_forum(*args, **kwargs):
+        raise RuntimeError("ChannelForumMissingError:  (caused by GetForumTopicsRequest)")
+
+    monkeypatch.setattr(client_module.Client, "topics", not_a_forum)
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": "Work"})
+    assert answer["ok"] is False
+    assert "not a forum" in answer["error"]
 
 
 # A chat that is simply not a forum is an ordinary answer, not a fault. The library's own

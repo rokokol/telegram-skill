@@ -2,6 +2,12 @@
 
 Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dated rather than numbered, and with no `Unreleased` section — a skill is read at whatever revision you have checked out, so whatever is on the default branch is what everyone already has, and a section for work that has landed but not shipped would never close. The rule lives in the [versioning](https://github.com/rokokol/versioning-skill) skill, which owns what has no version
 
+## 2026-11-01
+
+### Added
+
+- `mark-read --chat CHAT --topic TOPIC` moves one forum topic's read position, which is the only call that clears that topic's counter: the read names the topic as a thread and stops at the topic's newest message, or at `--id` when the caller read less than all of it. `--topic` takes a title as well as a number, so the topic the app names can be addressed without looking its number up; a title two topics share is a refusal naming both numbers, because a guess marks a conversation the user never opened read
+
 ## 2026-10-28
 
 ### Added

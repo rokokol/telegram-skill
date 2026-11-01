@@ -44,7 +44,9 @@ def build_parser():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--chat", required=True, help="the chat to follow")
-    parser.add_argument("--topic", type=int, help="one topic of a forum, if it is one")
+    parser.add_argument(
+        "--topic", help="one topic of a forum, by its number or by its title"
+    )
     parser.add_argument(
         "--interval",
         type=int,

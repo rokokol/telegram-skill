@@ -442,6 +442,34 @@ defect 'push/topic' 'tg_agentd/handler.py' \
   'if False:' \
   'a watch on one forum topic shows every topic of the forum, and the agent answers conversations it was not asked to follow'
 
+# Topics. A forum keeps a read position of its own for every topic, and the call that
+# moves one names the topic as a thread; a read of the chat leaves every counter standing
+defect 'topic/mark-chat' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'EOF'
+        if identifier == GENERAL_TOPIC:
+            await self._client.mark_read(chat)
+EOF
+  )" \
+  "$(
+    cat <<'EOF'
+        if True:
+            await self._client.mark_read(chat)
+EOF
+  )" \
+  'marking a topic read marks the whole chat instead, so the counter the user asked about stays where it was and every other one moves'
+
+defect 'topic/thread-swapped' 'tg_agentd/handler.py' \
+  '        await self._client.read_topic(chat, identifier, read_max_id)' \
+  '        await self._client.read_topic(chat, read_max_id, identifier)' \
+  'the read names a message as the thread and the topic as the position, so it marks a different conversation read than the one asked about'
+
+# Two topics may carry one title, and a guess marks a conversation the user never opened
+defect 'topic/title-guess' 'tg_agentd/handler.py' \
+  '        if len(found) > 1:' \
+  '        if False:' \
+  'a title two topics share marks the first of them read, and the far side sees a conversation read that nobody opened'
+
 # Push. The session receives every update, so a subscription has to be held to its grant
 defect 'push/recheck' 'tg_agentd/handler.py' \
   '                    refusal, _, _ = await self._grant(chat, "read")' \

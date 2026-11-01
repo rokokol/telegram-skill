@@ -30,6 +30,10 @@ class ChatIsNotAForum(ValueError):
     """Topics were asked of a chat that keeps none."""
 
 
+class NoSuchTopic(ValueError):
+    """A topic named by a request is not one the forum holds."""
+
+
 class BadUpload(ValueError):
     """A file in a request that cannot become an upload."""
 
@@ -55,7 +59,7 @@ class Handler:
             return _refused(str(unknown))
         except permissions.PermissionFileError as broken:
             return _refused(str(broken))
-        except (ChatIsNotAForum, BadUpload, BadMarkup) as plain:
+        except (ChatIsNotAForum, NoSuchTopic, BadUpload, BadMarkup) as plain:
             return _refused(str(plain))
         except Exception as unexpected:
             # Anything else has to come back as an answer too. Letting it close the
@@ -154,8 +158,15 @@ class Handler:
             request = await self._saved(request)
             chat = permissions.as_identifier(request.get("chat"))
             refusal, by, through = await self._grant(chat, "read")
+            # A title names a topic only through the forum's own list, so it is turned
+            # into a number once, before the first message arrives
+            if topic is not None:
+                topic = await self._topic_id(chat, topic)
         except permissions.BadIdentifier as bad:
             yield _refused(f"bad identifier: {bad}")
+            return
+        except (ChatIsNotAForum, NoSuchTopic) as missing:
+            yield _refused(str(missing))
             return
         except permissions.PermissionFileError as broken:
             yield _refused(str(broken))
@@ -264,17 +275,7 @@ class Handler:
             entity = await self._client.entity(chat)
             return profile.describe(entity, await self._client.full_profile(entity))
         if action == "topics":
-            try:
-                listed = await self._client.topics(chat)
-            except Exception as refused:
-                # A chat that is simply not a forum is an ordinary answer rather than a
-                # fault, and the library's own error names a constructor nobody outside
-                # it has heard of
-                if "ChannelForumMissing" in str(refused):
-                    raise ChatIsNotAForum(
-                        f"chat {chat} is not a forum, so it has no topics"
-                    ) from None
-                raise
+            listed = await self._forum_topics(chat)
             return {
                 "topics": [
                     {
@@ -293,9 +294,12 @@ class Handler:
                 terms["ids"] = request["ids"]
             if request.get("search"):
                 terms["search"] = request["search"]
-            # A forum keeps its messages inside topics, and one topic is one conversation
-            if request.get("topic"):
-                terms["reply_to"] = request["topic"]
+            # A forum keeps its messages inside topics, and one topic is one conversation.
+            # A topic is named by its number, or by the title the app shows, which costs
+            # one request to turn into a number
+            named = request.get("topic")
+            if named is not None:
+                terms["reply_to"] = await self._topic_id(chat, named)
             # Everything newer than a message already seen, which is how a watcher asks
             # for what it has not read rather than for the last N
             if request.get("since"):
@@ -365,6 +369,8 @@ class Handler:
             )
             return None
         if action == "mark-read":
+            if request.get("topic") is not None:
+                return await self._mark_topic(chat, request)
             await self._client.mark_read(chat)
             return None
         if action == "media":
@@ -383,6 +389,14 @@ class Handler:
         if found is None:
             return _refused(f"the account has no folder {folder_id}")
         members = folders.members_of(found)
+
+        # A topic is one conversation inside one chat, so a folder-wide read cannot name
+        # it: the request would read every member chat against another chat's topic
+        if action == "mark-read" and request.get("topic") is not None:
+            return _refused(
+                "a topic belongs to one chat, and this request marks a whole folder; "
+                "name the chat instead of the folder"
+            )
 
         result = await self._perform_folder(action, request, found, members)
         answer = _allowed(decision.by, action, result)
@@ -494,6 +508,88 @@ class Handler:
         # An empty list would be read on every download for nothing, so only what
         # happened is named
         return {key: found for key, found in result.items() if found or key == "written"}
+
+
+    async def _forum_topics(self, chat):
+        """The topics of a forum, saying plainly when the chat keeps none."""
+        try:
+            return await self._client.topics(chat)
+        except Exception as refused:
+            # A chat that is simply not a forum is an ordinary answer rather than a fault,
+            # and the library's own error names a constructor nobody outside it has heard of
+            if "ChannelForumMissing" in str(refused):
+                raise ChatIsNotAForum(
+                    f"chat {chat} is not a forum, so it has no topics"
+                ) from None
+            raise
+
+    async def _topic(self, chat, wanted):
+        """The forum topic a request names, by number or by the title the app shows.
+
+        A title carries no number, so it is matched whole and without case against the
+        forum's own list. Two topics of one name and none at all are refusals: a guess
+        marks the wrong conversation read, which the other side can see.
+        """
+        text = str(wanted).strip()
+        if text.isdigit():
+            identifier = int(text)
+            for topic in await self._forum_topics(chat):
+                if getattr(topic, "id", None) == identifier:
+                    return topic
+            raise NoSuchTopic(f"the forum holds no topic {identifier}")
+        found = [
+            topic
+            for topic in await self._forum_topics(chat)
+            if folders.title_of(topic).casefold() == text.casefold()
+        ]
+        if not found:
+            raise NoSuchTopic(
+                f"the forum holds no topic titled {text!r}; a number names one too, and "
+                "listing the topics gives both"
+            )
+        if len(found) > 1:
+            numbers = ", ".join(str(getattr(topic, "id", None)) for topic in found)
+            raise NoSuchTopic(
+                f"{len(found)} topics are titled {text!r}: {numbers}; "
+                "name one by its number"
+            )
+        return found[0]
+
+    async def _topic_id(self, chat, wanted):
+        """A topic's number, listing the forum only when the request named a title."""
+        text = str(wanted).strip()
+        if text.isdigit():
+            return int(text)
+        return getattr(await self._topic(chat, wanted), "id", None)
+
+    async def _mark_topic(self, chat, request):
+        """Mark one forum topic read, and say which message the read reached.
+
+        The General topic carries no thread of its own, so it moves with the chat's read
+        position; every other topic moves by the call that names it as a thread. A
+        request may name the message to stop at, which is how a reader marks what it has
+        actually read rather than everything in the topic.
+        """
+        topic = await self._topic(chat, request["topic"])
+        identifier = getattr(topic, "id", None)
+        title = folders.title_of(topic)
+        if identifier == GENERAL_TOPIC:
+            await self._client.mark_read(chat)
+            return {"chat": chat, "topic": identifier, "title": title, "general": True}
+        read_max_id = request.get("id")
+        if read_max_id is None:
+            # The topic's own top is the newest message in it, so a read to it covers
+            # every message the forum counted as unread
+            read_max_id = getattr(topic, "top_message", 0)
+        if type(read_max_id) is not int or read_max_id <= 0:
+            raise NoSuchTopic(f"topic {identifier} holds no message to stop the read at")
+        await self._client.read_topic(chat, identifier, read_max_id)
+        return {
+            "chat": chat,
+            "topic": identifier,
+            "title": title,
+            "read_max_id": read_max_id,
+        }
 
 
 def _upload(attached):

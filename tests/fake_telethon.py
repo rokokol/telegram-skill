@@ -111,6 +111,8 @@ class FakeTopic:
     id: int
     title: str
     unread_count: int = 0
+    # The identifier of the newest message in the topic, which a read stops at
+    top_message: int = 0
 
 
 class FakeClient:
@@ -196,6 +198,14 @@ class FakeClient:
             )
         if name == "GetForumTopicsRequest":
             return _Topics(list(self.topics))
+        if name == "ReadDiscussionRequest":
+            self._record(
+                "raw_topic_read",
+                peer=request.peer,
+                msg_id=request.msg_id,
+                read_max_id=request.read_max_id,
+            )
+            return True
         if name == "UpdateDialogFilterRequest":
             self._record(
                 "raw_update_filter",

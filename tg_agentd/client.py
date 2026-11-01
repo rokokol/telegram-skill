@@ -17,6 +17,7 @@ from telethon.tl.functions.messages import (
     GetForumTopicsRequest,
     GetFullChatRequest,
     GetRichMessageRequest,
+    ReadDiscussionRequest,
     SendMessageRequest,
     SendReactionRequest,
     UpdateDialogFilterRequest,
@@ -164,6 +165,20 @@ class Client:
     async def mark_read(self, chat_id, message=None):
         """Mark history as read, which the other side can see."""
         return await self._telethon.send_read_acknowledge(chat_id, message=message)
+
+    async def read_topic(self, chat_id, topic_id, read_max_id):
+        """Move one forum topic's read position, which the other side can see.
+
+        A forum keeps a read position of its own for every topic, and the call that moves
+        one names it: the topic is the thread of the service message that created it, and
+        the read reaches the last message inside it. A history read reaches the chat, and
+        leaves every topic's counter where it stood.
+        """
+        return await self._telethon(
+            ReadDiscussionRequest(
+                peer=chat_id, msg_id=topic_id, read_max_id=read_max_id
+            )
+        )
 
     async def react(self, chat_id, message_id, reactions):
         return await self._telethon(

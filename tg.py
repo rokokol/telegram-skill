@@ -43,6 +43,8 @@ def build_parser():
             "  tg.py whoami\n"
             "  tg.py chat-info --chat 777\n"
             "  tg.py read --chat -1001234567890 --limit 20\n"
+            "  tg.py read --chat -1001234567890 --topic 'Newcomers 1'\n"
+            "  tg.py mark-read --chat -1001234567890 --topic 'Newcomers 1'\n"
             "  tg.py read --chat 777 --ids 12\n"
             "  tg.py react --chat 777 --id 12 --reactions '👍'\n"
             "  tg.py react --chat 777 --id 12 --reactions\n"
@@ -83,7 +85,12 @@ def build_parser():
         help="a file to send with send or reply; this client reads it and the service never opens a path",
     )
     parser.add_argument("--reply-to", type=int, help="the message this one answers")
-    parser.add_argument("--id", type=int, help="one message identifier, for edit or react")
+    parser.add_argument(
+        "--id",
+        type=int,
+        help="one message identifier, for edit and react; with mark-read and --topic, "
+        "the message the read stops at",
+    )
     parser.add_argument("--ids", type=int, nargs="+", help="message identifiers")
     parser.add_argument(
         "--reactions", nargs="*",
@@ -92,7 +99,10 @@ def build_parser():
     parser.add_argument("--add", type=int, nargs="+", help="chats to add, for folder-edit")
     parser.add_argument("--remove", type=int, nargs="+", help="chats to remove, for folder-edit")
     parser.add_argument("--limit", type=int, help="how many messages to read")
-    parser.add_argument("--topic", type=int, help="read one topic of a forum")
+    parser.add_argument(
+        "--topic",
+        help="read or mark read one topic of a forum, by its number or by its title",
+    )
     parser.add_argument(
         "--since",
         type=int,
