@@ -191,7 +191,7 @@ def test_a_topic_of_a_chat_that_is_no_forum_says_so(ask, monkeypatch):
     monkeypatch.setattr(client_module.Client, "topics", not_a_forum)
     answer = ask({"action": "mark-read", "chat": CHAT, "topic": "Work"})
     assert answer["ok"] is False
-    assert "not a forum" in answer["error"]
+    assert "keeps no topics" in answer["error"]
 
 
 # A chat that is simply not a forum is an ordinary answer, not a fault. The library's own
@@ -204,5 +204,24 @@ def test_a_chat_that_is_no_forum_says_so_plainly(ask, store, monkeypatch):
     (store.root / "chats" / "777.conf").write_text("allow: read\n")
     answer = ask({"action": "topics", "chat": 777})
     assert answer["ok"] is False
-    assert "not a forum" in answer["error"]
+    assert "keeps no topics" in answer["error"]
     assert "ChannelForumMissing" not in answer["error"]
+
+
+# A chat that is no forum at all answers with a constructor name of its own, and half the
+# chats in an account are one of these: a basic group, a person, a channel without access
+@pytest.mark.parametrize(
+    "name", ["ChannelInvalidError", "ChannelPrivateError", "PeerIdInvalidError"]
+)
+def test_every_shape_of_no_topics_says_so_plainly(ask, store, monkeypatch, name):
+    refusal = type(name, (Exception,), {})
+
+    async def no_topics(*args, **kwargs):
+        raise refusal()
+
+    monkeypatch.setattr(client_module.Client, "topics", no_topics)
+    (store.root / "chats" / "777.conf").write_text("allow: read\n")
+    answer = ask({"action": "topics", "chat": 777})
+    assert answer["ok"] is False
+    assert "keeps no topics" in answer["error"]
+    assert name not in answer["error"]

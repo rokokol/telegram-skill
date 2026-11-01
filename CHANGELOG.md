@@ -13,6 +13,11 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 - A message read carries its `date`, the sender's `from_name`, the message it answers as `reply_to`, where a forward came from as `forwarded_from`, and the `duration` of a voice note, a round video, a video or an audio file. A summary without them is sentences with no speaker and no time
 - A poll reads as its question, answers, counts and total, and a poll whose voters are public names who chose each answer. A round video reads as `round` rather than as a video
 
+### Fixed
+
+- A poll's voter names are one page, and `voters_missing` counts the voters that page did not reach. Before, a poll with more voters than a page named the first hundred as though they were everybody
+- `topics` says that a chat keeps no topics this account can list, whichever way Telegram puts it: a chat that is no forum, a basic group, a person and a channel the account cannot reach each answered with a constructor name of their own
+
 ## 2026-10-28
 
 ### Added

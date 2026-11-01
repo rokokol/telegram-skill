@@ -34,6 +34,17 @@ class NoSuchTopic(ValueError):
     """A topic named by a request is not one the forum holds."""
 
 
+# What Telegram says when a chat keeps no topics this account can list: it is no forum, it
+# is no channel at all, it is closed to this account, or the identifier names nobody. The
+# names are the library's own, because the request carries no other marker
+NO_TOPICS = (
+    "ChannelForumMissing",
+    "ChannelInvalid",
+    "ChannelPrivate",
+    "PeerIdInvalid",
+)
+
+
 class BadFind(ValueError):
     """A search by name that names nothing to look for."""
 
@@ -617,11 +628,12 @@ class Handler:
         try:
             return await self._client.topics(chat)
         except Exception as refused:
-            # A chat that is simply not a forum is an ordinary answer rather than a fault,
-            # and the library's own error names a constructor nobody outside it has heard of
-            if "ChannelForumMissing" in str(refused):
+            # A chat that keeps no topics is an ordinary answer rather than a fault, and
+            # the library's own error names a constructor nobody outside it has heard of
+            said = f"{type(refused).__name__}: {refused}"
+            if any(marker in said for marker in NO_TOPICS):
                 raise ChatIsNotAForum(
-                    f"chat {chat} is not a forum, so it has no topics"
+                    f"chat {chat} keeps no topics this account can list"
                 ) from None
             raise
 

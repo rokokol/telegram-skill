@@ -495,6 +495,13 @@ defect 'poll/voters-page' 'tg_agentd/handler.py' \
   '        if False:' \
   'a poll with more voters than one page reports the named hundred as everybody who voted, and no reader can tell that the list is short'
 
+# Half the chats of an account keep no topics: a basic group, a person, a channel the
+# account cannot reach. Each answers with a constructor name of its own
+defect 'topics/no-access' 'tg_agentd/handler.py' \
+  '    "ChannelPrivate",' \
+  '    "ChannelClosedForNobody",' \
+  'a channel the account cannot reach answers with a Telethon constructor name instead of saying that it keeps no topics this account can list'
+
 # Push. The session receives every update, so a subscription has to be held to its grant
 defect 'push/recheck' 'tg_agentd/handler.py' \
   '                    refusal, _, _ = await self._grant(chat, "read")' \
