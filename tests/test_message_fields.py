@@ -171,3 +171,27 @@ def test_a_refused_voter_list_leaves_the_counts_standing(store):
     [message] = read(store, [Message(id=5, text="", sender_id=7, poll=poll(public=True))])
     assert message["poll"]["total"] == 3
     assert "voters_error" in message["poll"]
+
+
+# The names are one page of a list that can be longer, and a reader that reports the page
+# as everybody is the guess these fields exist to prevent
+def test_a_voter_page_that_stops_short_says_how_many_it_did_not_name(store):
+    short = t.messages.VotesList(
+        count=9, votes=VOTES.votes, chats=[], users=VOTES.users
+    )
+    [message] = read(
+        store,
+        [Message(id=5, text="", sender_id=7, poll=poll(public=True))],
+        poll_votes={5: short},
+    )
+    assert message["poll"]["voters_missing"] == 6
+    assert message["poll"]["answers"][0]["voters"] == ["Ann", "Bo Li"]
+
+
+def test_a_page_holding_every_voter_names_nothing_missing(store):
+    [message] = read(
+        store,
+        [Message(id=5, text="", sender_id=7, poll=poll(public=True))],
+        poll_votes={5: VOTES},
+    )
+    assert "voters_missing" not in message["poll"]

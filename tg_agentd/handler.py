@@ -400,7 +400,8 @@ class Handler:
 
         The counts are in the message already; the names are one more request, made only
         for such a poll, and a refusal of it leaves the counts standing rather than failing
-        the whole read.
+        the whole read. One page of names is asked for, so a poll with more voters than a
+        page holds says how many it did not name instead of reading as the whole list.
         """
         try:
             answer = await self._client.poll_votes(chat, message.id)
@@ -411,8 +412,14 @@ class Handler:
             getattr(user, "id", None): _display_name(user)
             for user in getattr(answer, "users", None) or []
         }
+        votes = getattr(answer, "votes", None) or []
+        # The counts are complete whether or not the page is, and the difference between
+        # them is the only place a reader learns that the names are not everybody
+        voted = getattr(answer, "count", None)
+        if type(voted) is int and voted > len(votes):
+            poll["voters_missing"] = voted - len(votes)
         by_option = {held["option"]: held for held in poll["answers"]}
-        for vote in getattr(answer, "votes", None) or []:
+        for vote in votes:
             voter = folders._identifier(getattr(vote, "peer", None))
             chosen = getattr(vote, "options", None) or [getattr(vote, "option", None)]
             for option in chosen:

@@ -482,6 +482,13 @@ defect 'find/folder-grant' 'tg_agentd/handler.py' \
   '            if folder_id is None:' \
   'a folder that grants only a digest reports the names of every chat inside it, so a summary of unread counts also names the chats it never let the agent read'
 
+# A poll's names arrive a page at a time, and a reader that reports the page as everybody
+# turns a hundred voters into a tally nobody can trust
+defect 'poll/voters-page' 'tg_agentd/handler.py' \
+  '        if type(voted) is int and voted > len(votes):' \
+  '        if False:' \
+  'a poll with more voters than one page reports the named hundred as everybody who voted, and no reader can tell that the list is short'
+
 # Push. The session receives every update, so a subscription has to be held to its grant
 defect 'push/recheck' 'tg_agentd/handler.py' \
   '                    refusal, _, _ = await self._grant(chat, "read")' \
