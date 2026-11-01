@@ -24,6 +24,8 @@ An agent that reads your chats and writes to them shares one channel with everyo
 
 - [Requirements](#requirements)
 - [Install](#install)
+  - [NixOS](#nixos)
+  - [Arch Linux](#arch-linux)
 - [How it is arranged](#how-it-is-arranged)
 - [Permissions](#permissions)
 - [What it does not do](#what-it-does-not-do)
@@ -42,7 +44,9 @@ npx skills add -g rokokol/telegram-skill    # for you, everywhere
 npx skills add rokokol/telegram-skill       # for the project you are standing in
 ```
 
-The service half comes with its own NixOS module, so a system configuration takes this repository as a flake input and turns it on:
+### NixOS
+
+The service half is a flake input: a system configuration takes this repository and turns the module on
 
 ```nix
 services.tg-agent = {
@@ -55,7 +59,9 @@ services.tg-agent = {
 
 The module is where the isolation lives — `DynamicUser`, credentials read before the service drops its privileges, the session under `/var/lib/private` — so it ships here rather than being written again by everyone who runs it. `references/setup.md` says what it provides and why
 
-On Arch Linux, or any distribution with systemd and no Nix, the same unit ships as plain files in `systemd/`, and `packaging/arch/PKGBUILD` installs them with the service. `python-telethon` and `python-cryptg` come from the AUR, so build it with an AUR helper or install those two first:
+### Arch Linux
+
+The same unit ships as plain files in `systemd/`, and `packaging/arch/PKGBUILD` installs them with the service, so a distribution with systemd and no Nix runs it too. `python-telethon` and `python-cryptg` come from the AUR, so build it with an AUR helper or install those two first:
 
 ```bash
 cd packaging/arch && makepkg -si
@@ -71,12 +77,16 @@ The skill lands in `/usr/share/tg-agent/skill`, at the revision of the service i
 
 ## How it is arranged
 
-```
-you ──► agent ──► tg.py ──► unix socket ──► tg-agentd ──► Telegram
-                                               │
-                                               ├── credentials, in the unit's namespace
-                                               ├── session, under /var/lib/private
-                                               └── permission files, read-only
+```mermaid
+flowchart LR
+  you[you] --> agent[agent]
+  agent --> client["tg.py<br>no secret, no decision"]
+  client -->|"one request per call"| socket[["unix socket"]]
+  socket --> daemon["tg-agentd<br>decides by the permission files"]
+  daemon -->|"MTProto"| telegram[(Telegram)]
+  creds["the api pair<br>the unit's credential namespace"] --> daemon
+  daemon --- session["session<br>/var/lib/private"]
+  daemon --- files["permission files<br>root's, read-only"]
 ```
 
 The client holds no secret and makes no decision. It sends a request and prints the answer, so the standard library is all it needs. Everything that decides is behind the socket, where the agent cannot reach it
