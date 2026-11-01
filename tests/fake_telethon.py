@@ -335,8 +335,10 @@ class FakeClient:
 
     # The calls that must never happen unless a permission asked for them
 
-    async def send_read_acknowledge(self, entity, message=None, **kwargs):
-        self._record("send_read_acknowledge", entity=entity, message=message)
+    async def send_read_acknowledge(self, entity, message=None, *, max_id=None, **kwargs):
+        self._record(
+            "send_read_acknowledge", entity=entity, message=message, max_id=max_id
+        )
 
     async def download_media(self, message, file=None, **kwargs):
         self._record("download_media", message=message, file=file)

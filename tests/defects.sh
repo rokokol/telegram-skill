@@ -448,7 +448,7 @@ defect 'topic/mark-chat' 'tg_agentd/handler.py' \
   "$(
     cat <<'EOF'
         if identifier == GENERAL_TOPIC:
-            await self._client.mark_read(chat)
+            await self._client.mark_read(chat, stopped)
 EOF
   )" \
   "$(
@@ -460,8 +460,8 @@ EOF
   'marking a topic read marks the whole chat instead, so the counter the user asked about stays where it was and every other one moves'
 
 defect 'topic/thread-swapped' 'tg_agentd/handler.py' \
-  '        await self._client.read_topic(chat, identifier, read_max_id)' \
-  '        await self._client.read_topic(chat, read_max_id, identifier)' \
+  '        await self._client.read_topic(chat, identifier, stopped)' \
+  '        await self._client.read_topic(chat, stopped, identifier)' \
   'the read names a message as the thread and the topic as the position, so it marks a different conversation read than the one asked about'
 
 # Two topics may carry one title, and a guess marks a conversation the user never opened
@@ -576,3 +576,76 @@ SILENT
   '            except FileNotFoundError:
                 answer = refusal()' \
   'a request made while the link is down gets no answer at all, so the caller cannot tell a lost link from a request the service never read'
+
+# Selective read. A read names the message it stops at, and everything newer stays unread
+defect 'mark-read/chat-limit' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'LIMIT'
+            stopped = _read_to(request)
+            await self._client.mark_read(chat, stopped)
+            if stopped is None:
+LIMIT
+  )" \
+  "$(
+    cat <<'LIMIT'
+            stopped = _read_to(request)
+            await self._client.mark_read(chat)
+            if stopped is None:
+LIMIT
+  )" \
+  'mark-read --chat --id marks the whole chat read, so messages the agent never saw lose their unread mark'
+
+defect 'mark-read/max-id' 'tg_agentd/client.py' \
+  'send_read_acknowledge(chat_id, max_id=max_id)' \
+  'send_read_acknowledge(chat_id)' \
+  'the read never carries the message it stops at, so every read reaches the newest message in the chat'
+
+defect 'mark-read/general-limit' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'LIMIT'
+        if identifier == GENERAL_TOPIC:
+            await self._client.mark_read(chat, stopped)
+LIMIT
+  )" \
+  "$(
+    cat <<'LIMIT'
+        if identifier == GENERAL_TOPIC:
+            await self._client.mark_read(chat)
+LIMIT
+  )" \
+  'the General topic ignores --id, so a read meant to stop at one message clears the whole chat'
+
+defect 'mark-read/folder-limit' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'LIMIT'
+            for chat in members:
+                await self._client.mark_read(chat, stopped)
+LIMIT
+  )" \
+  "$(
+    cat <<'LIMIT'
+            for chat in members:
+                await self._client.mark_read(chat)
+LIMIT
+  )" \
+  'marking a folder read to --id marks every member whole, so a message nobody read leaves the unread count of every chat in the folder'
+
+defect 'mark-read/reply-limit' 'tg_agentd/handler.py' \
+  '                await self._client.mark_read(chat, read_to)' \
+  '                await self._client.mark_read(chat)' \
+  'a reply marks the whole chat read, so a message that arrived while the agent was writing is marked read without being read'
+
+defect 'mark-read/unchecked' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'LIMIT'
+    if type(stopped) is not int or stopped <= 0:
+        raise BadMarkRead(f"{stopped!r} is not a message a read can stop at")
+LIMIT
+  )" \
+  "$(
+    cat <<'LIMIT'
+    if False:
+        raise BadMarkRead(f"{stopped!r} is not a message a read can stop at")
+LIMIT
+  )" \
+  'a number that names no message reaches Telegram as a limit, and a zero there marks the whole chat read'

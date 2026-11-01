@@ -7,6 +7,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 ### Added
 
 - `mark-read --chat CHAT --topic TOPIC` moves one forum topic's read position, which is the only call that clears that topic's counter: the read names the topic as a thread and stops at the topic's newest message, or at `--id` when the caller read less than all of it. `--topic` takes a title as well as a number, so the topic the app names can be addressed without looking its number up; a title two topics share is a refusal naming both numbers, because a guess marks a conversation the user never opened read
+- `mark-read --id N` stops the read at message N in any chat and in every member of a folder, so an agent that read part of a chat leaves the rest unread; the answer names `read_max_id`. Before, only a named forum topic honoured `--id`
 - `find --name TEXT` answers the chats whose own name or username holds the text, without case and with a leading `@` accepted: a chat a permission file names, and a member of a folder that grants `read`. The name and the username come from the same description `chat-info` gives, under the same grant, so a chat the agent may only write into stays unnamed. Nothing here reads the account's dialog list, which is what `dialogs` is for
 - `systemd/` holds the unit, its socket, the outbox sweep, the tmpfiles rules and `tg-agent-login` as plain files, for a system with systemd and no Nix. `tests/test_units.py` holds them to the module's isolation: a dynamic user, credentials loaded by systemd, the same sandbox, no restart of a session that is not signed in, and permissions and outbox outside the state directory
 - `packaging/arch/PKGBUILD` installs the service, those units and the skill on Arch Linux
@@ -14,8 +15,13 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 - A message read carries its `date`, the sender's `from_name`, the message it answers as `reply_to`, where a forward came from as `forwarded_from`, and the `duration` of a voice note, a round video, a video or an audio file. A summary without them is sentences with no speaker and no time
 - A poll reads as its question, answers, counts and total, and a poll whose voters are public names who chose each answer. A round video reads as `round` rather than as a video
 
+### Changed
+
+- A reply under `mark-read-on-reply` marks read up to the message it answers rather than the whole chat, so a message that arrived while the agent was writing stays unread
+
 ### Fixed
 
+- `--id` was ignored everywhere except a named forum topic: a chat, the General topic and a folder member marked the whole history read and answered as if nothing stopped it. Each now stops at the message named, and a number that names no message is refused
 - A poll's voter names are one page, and `voters_missing` counts the voters that page did not reach. Before, a poll with more voters than a page named the first hundred as though they were everybody
 - `topics` says that a chat keeps no topics this account can list, whichever way Telegram puts it: a chat that is no forum, a basic group, a person and a channel the account cannot reach each answered with a constructor name of their own
 

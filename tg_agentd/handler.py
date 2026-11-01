@@ -45,6 +45,10 @@ NO_TOPICS = (
 )
 
 
+class BadMarkRead(ValueError):
+    """A read names a message to stop at that no message can be."""
+
+
 class BadFind(ValueError):
     """A search by name that names nothing to look for."""
 
@@ -74,7 +78,9 @@ class Handler:
             return _refused(str(unknown))
         except permissions.PermissionFileError as broken:
             return _refused(str(broken))
-        except (ChatIsNotAForum, NoSuchTopic, BadUpload, BadFind, BadMarkup) as plain:
+        except (
+            ChatIsNotAForum, NoSuchTopic, BadUpload, BadFind, BadMarkup, BadMarkRead
+        ) as plain:
             return _refused(str(plain))
         except Exception as unexpected:
             # Anything else has to come back as an answer too. Letting it close the
@@ -354,6 +360,11 @@ class Handler:
                 raise BadMarkup(
                     "rich markup cannot caption a file; send the text as its own message"
                 )
+            # The read that follows a reply stops at the message answered, so a number
+            # that names no message is refused before the reply goes out, not after
+            read_to = None
+            if action == "reply" and self._store.chat_flag(chat, "mark-read-on-reply"):
+                read_to = _read_to(request, "reply_to")
             # A file is a message too, so it takes the grant that sends words. Its bytes
             # arrive in the request because the service never opens a path on a caller's
             # behalf: a path would reach whatever this process can read, its session
@@ -376,7 +387,7 @@ class Handler:
             if action == "reply" and self._store.chat_flag(chat, "mark-read-on-reply"):
                 # A reply with no preceding read receipt is a sequence no person
                 # produces, and it identifies the account as automated
-                await self._client.mark_read(chat)
+                await self._client.mark_read(chat, read_to)
             return _message(sent)
         if action == "edit":
             markup = await self._markup(request)
@@ -399,8 +410,11 @@ class Handler:
         if action == "mark-read":
             if request.get("topic") is not None:
                 return await self._mark_topic(chat, request)
-            await self._client.mark_read(chat)
-            return None
+            stopped = _read_to(request)
+            await self._client.mark_read(chat, stopped)
+            if stopped is None:
+                return None
+            return {"chat": chat, "read_max_id": stopped}
         if action == "media":
             return await self._download(chat, request.get("ids", []))
         raise permissions.UnknownAction(f"no handler for {action!r}")
@@ -495,9 +509,13 @@ class Handler:
         if action == "read":
             return {"members": members}
         if action == "mark-read":
+            stopped = _read_to(request)
             for chat in members:
-                await self._client.mark_read(chat)
-            return {"marked": members}
+                await self._client.mark_read(chat, stopped)
+            marked = {"marked": members}
+            if stopped is not None:
+                marked["read_max_id"] = stopped
+            return marked
         if action == "folder-edit":
             wanted = sorted(set(members) | set(request.get("add", [])))
             wanted = [m for m in wanted if m not in set(request.get("remove", []))]
@@ -687,23 +705,46 @@ class Handler:
         topic = await self._topic(chat, request["topic"])
         identifier = getattr(topic, "id", None)
         title = folders.title_of(topic)
+        stopped = _read_to(request)
         if identifier == GENERAL_TOPIC:
-            await self._client.mark_read(chat)
-            return {"chat": chat, "topic": identifier, "title": title, "general": True}
-        read_max_id = request.get("id")
-        if read_max_id is None:
+            await self._client.mark_read(chat, stopped)
+            answer = {
+                "chat": chat,
+                "topic": identifier,
+                "title": title,
+                "general": True,
+            }
+            if stopped is not None:
+                answer["read_max_id"] = stopped
+            return answer
+        if stopped is None:
             # The topic's own top is the newest message in it, so a read to it covers
             # every message the forum counted as unread
-            read_max_id = getattr(topic, "top_message", 0)
-        if type(read_max_id) is not int or read_max_id <= 0:
+            stopped = getattr(topic, "top_message", 0)
+        if type(stopped) is not int or stopped <= 0:
             raise NoSuchTopic(f"topic {identifier} holds no message to stop the read at")
-        await self._client.read_topic(chat, identifier, read_max_id)
+        await self._client.read_topic(chat, identifier, stopped)
         return {
             "chat": chat,
             "topic": identifier,
             "title": title,
-            "read_max_id": read_max_id,
+            "read_max_id": stopped,
         }
+
+
+def _read_to(request, key="id"):
+    """The message a read stops at, when the request names one.
+
+    Telegram treats the number as a limit on the receipt, so a read to message N leaves
+    everything newer unread while a number that names no message would be read as one
+    reaching the whole chat. Such a number is refused rather than passed on.
+    """
+    stopped = request.get(key)
+    if stopped is None:
+        return None
+    if type(stopped) is not int or stopped <= 0:
+        raise BadMarkRead(f"{stopped!r} is not a message a read can stop at")
+    return stopped
 
 
 def _upload(attached):

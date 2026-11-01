@@ -174,9 +174,14 @@ class Client:
         """
         return await self._telethon.get_dialogs(**kwargs)
 
-    async def mark_read(self, chat_id, message=None):
-        """Mark history as read, which the other side can see."""
-        return await self._telethon.send_read_acknowledge(chat_id, message=message)
+    async def mark_read(self, chat_id, max_id=None):
+        """Mark history as read, which the other side can see.
+
+        Telegram takes the identifier as part of the receipt: with one, everything at or
+        below it is read and everything newer stays unread; without one, the whole
+        history is. The caller decides which, so the read says what it stopped at.
+        """
+        return await self._telethon.send_read_acknowledge(chat_id, max_id=max_id)
 
     async def read_topic(self, chat_id, topic_id, read_max_id):
         """Move one forum topic's read position, which the other side can see.

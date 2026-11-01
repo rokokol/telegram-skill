@@ -168,6 +168,16 @@ def test_the_general_topic_moves_the_chats_own_read_position(ask):
     assert answer["result"]["general"] is True
 
 
+# General moves the chat's own read position, which can stop at a message too
+def test_the_general_topic_can_stop_at_one_message(ask):
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 1, "id": 900})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("send_read_acknowledge") == [
+        {"entity": CHAT, "message": None, "max_id": 900}
+    ]
+    assert answer["result"]["read_max_id"] == 900
+
+
 def test_marking_a_topic_read_needs_mark_read(ask, store):
     (store.root / "chats" / f"{CHAT}.conf").write_text("allow: read\n")
     answer = ask({"action": "mark-read", "chat": CHAT, "topic": 17})

@@ -86,7 +86,17 @@ def test_mark_read_reaches_only_folder_members(ask, store, words):
     assert answer["allowed_by"] == words
     assert answer["result"]["marked"] == [123, 777, 888]
     assert ask.fake.called("send_read_acknowledge") == [
-        {"entity": chat, "message": None} for chat in [123, 777, 888]
+        {"entity": chat, "message": None, "max_id": None} for chat in [123, 777, 888]
+    ]
+
+
+def test_marking_a_folder_read_can_stop_at_one_message(ask, store):
+    grant_folder(store, 5, "mark-read")
+    answer = ask({"action": "mark-read", "folder": 5, "id": 12})
+    assert answer["ok"] is True, answer
+    assert answer["result"]["read_max_id"] == 12
+    assert ask.fake.called("send_read_acknowledge") == [
+        {"entity": chat, "message": None, "max_id": 12} for chat in [777, 888]
     ]
 
 
@@ -130,7 +140,7 @@ def test_a_folder_grants_mark_read_to_an_individual_member(ask, store):
     assert answer["ok"] is True
     assert answer["through_folder"]["id"] == 5
     assert ask.fake.called("send_read_acknowledge") == [
-        {"entity": 777, "message": None}
+        {"entity": 777, "message": None, "max_id": None}
     ]
 
 

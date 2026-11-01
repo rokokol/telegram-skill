@@ -20,7 +20,7 @@ members: 6f3a9c21b4d8
 ```
 
 - **`allow`** is the list of granted words, separated by commas. `tg-agentd --help` prints every word with what it permits; a word outside that vocabulary is an error naming the file, never a silent pass
-- **`mark-read-on-reply`** makes a reply mark the chat read. A reply with no preceding read receipt is a sequence no person produces, so leaving this off is visible to the other side
+- **`mark-read-on-reply`** makes a reply mark the chat read up to the message it answers. A reply with no preceding read receipt is a sequence no person produces, so leaving this off is visible to the other side
 - **`members`**, on a folder, records the membership the grant was written for. An answer through a folder whose membership has moved since carries a warning. A file without it is not reported as drifted
 
 ## A grant for every target
@@ -51,6 +51,8 @@ So every answer permitted by `all` says so, and a survey of what is held lists i
 A folder's `read` or `write` grants the corresponding access to its current member chats, pinned chats included. Target a member chat when reacting; the answer names the folder that allowed it. Membership can change from any device, so this also covers chats added later. Folders do not grant sending messages
 
 `mark-read` is a separate folder grant: it marks history read in every current member, pinned chats included, and the other side can see the read receipt. `read` and `digest` never imply it. The answer lists the affected chats under `marked`
+
+`mark-read --id N` stops at message N, as it does in one chat, and the answer names `read_max_id`. One identifier reaches every member, so it names a different message in each of them: a chat whose history is shorter than that has nothing to mark. Without `--id` the whole history of every member is marked
 
 The same property forces one refusal. A folder whose `allow` holds `read`, `write`, `digest`, `media` or `mark-read` refuses `folder-edit`, `folder-create` and `folder-delete`, even when its own file lists them. Without that refusal the agent adds a chat to a folder and reaches a chat nobody granted it. A folder that grants only renaming or reordering has no such reach and stays editable
 

@@ -62,7 +62,17 @@ def test_listing_dialogs_never_marks_anything_read(client, fake):
 def test_marking_read_happens_only_when_asked(client, fake):
     run(client.start())
     run(client.mark_read(777))
-    assert fake.called("send_read_acknowledge") == [{"entity": 777, "message": None}]
+    assert fake.called("send_read_acknowledge") == [
+        {"entity": 777, "message": None, "max_id": None}
+    ]
+
+
+def test_a_read_can_stop_at_one_message(client, fake):
+    run(client.start())
+    run(client.mark_read(777, max_id=5))
+    assert fake.called("send_read_acknowledge") == [
+        {"entity": 777, "message": None, "max_id": 5}
+    ]
 
 
 @pytest.mark.parametrize("for_all", [True, False])

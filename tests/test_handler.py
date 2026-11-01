@@ -156,3 +156,58 @@ def test_replying_marks_read_only_where_the_file_asks(ask, store, fake):
     )
     ask({"action": "reply", "chat": 778, "text": "ok", "reply_to": 1})
     assert fake.called("send_read_acknowledge")
+
+
+# A read names the message it stops at, so an agent that read part of a chat leaves the
+# rest unread: marking everything hides messages nobody has seen
+def test_marking_a_chat_read_can_stop_at_one_message(ask, store, fake):
+    grant(store, 777, "mark-read")
+    answer = ask({"action": "mark-read", "chat": 777, "id": 12})
+    assert answer["ok"] is True, answer
+    assert fake.called("send_read_acknowledge") == [
+        {"entity": 777, "message": None, "max_id": 12}
+    ]
+    assert answer["result"]["read_max_id"] == 12
+
+
+def test_marking_a_chat_read_without_a_message_reaches_the_whole_chat(ask, store, fake):
+    grant(store, 777, "mark-read")
+    answer = ask({"action": "mark-read", "chat": 777})
+    assert answer["ok"] is True, answer
+    assert fake.called("send_read_acknowledge") == [
+        {"entity": 777, "message": None, "max_id": None}
+    ]
+    assert not (answer["result"] or {}).get("read_max_id")
+
+
+# A number that names no message would be read as "everything newer is read too", so it
+# is refused rather than passed on
+@pytest.mark.parametrize("bad", [0, -3, "12", 1.5, True])
+def test_a_read_that_stops_at_no_message_is_refused(ask, store, fake, bad):
+    grant(store, 777, "mark-read")
+    answer = ask({"action": "mark-read", "chat": 777, "id": bad})
+    assert answer["ok"] is False
+    assert "message" in answer["error"]
+    assert not fake.called("send_read_acknowledge")
+
+
+# Replying reads what the reply answers and no further, so a message that arrived while
+# the agent was writing stays unread
+def test_a_reply_marks_read_up_to_the_message_it_answers(ask, store, fake):
+    (store.root / "chats" / "778.conf").write_text(
+        "allow: reply\nmark-read-on-reply: yes\n"
+    )
+    ask({"action": "reply", "chat": 778, "text": "ok", "reply_to": 12})
+    assert fake.called("send_read_acknowledge") == [
+        {"entity": 778, "message": None, "max_id": 12}
+    ]
+
+
+def test_a_reply_with_no_message_to_answer_reaches_the_whole_chat(ask, store, fake):
+    (store.root / "chats" / "778.conf").write_text(
+        "allow: reply\nmark-read-on-reply: yes\n"
+    )
+    ask({"action": "reply", "chat": 778, "text": "ok"})
+    assert fake.called("send_read_acknowledge") == [
+        {"entity": 778, "message": None, "max_id": None}
+    ]

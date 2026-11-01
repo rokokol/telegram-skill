@@ -46,6 +46,7 @@ def build_parser():
             "  tg.py topics --chat -1001234567890\n"
             "  tg.py read --chat -1001234567890 --topic 'Newcomers 1'\n"
             "  tg.py mark-read --chat -1001234567890 --topic 'Newcomers 1'\n"
+            "  tg.py mark-read --chat 777 --id 120\n"
             "  tg.py find --name 'club'\n"
             "  tg.py find --name '@tech_club'\n"
             "  tg.py read --chat 777 --ids 12\n"
@@ -93,8 +94,8 @@ def build_parser():
     parser.add_argument(
         "--id",
         type=int,
-        help="one message identifier, for edit and react; with mark-read and --topic, "
-        "the message the read stops at",
+        help="one message identifier, for edit and react; with mark-read, the message the "
+        "read stops at, in a chat, a folder or a topic",
     )
     parser.add_argument("--ids", type=int, nargs="+", help="message identifiers")
     parser.add_argument(
