@@ -47,6 +47,7 @@ def build_parser():
             "  tg.py read --chat -1001234567890 --topic 'Newcomers 1'\n"
             "  tg.py mark-read --chat -1001234567890 --topic 'Newcomers 1'\n"
             "  tg.py find --name 'club'\n"
+            "  tg.py find --name '@tech_club'\n"
             "  tg.py read --chat 777 --ids 12\n"
             "  tg.py react --chat 777 --id 12 --reactions '👍'\n"
             "  tg.py react --chat 777 --id 12 --reactions\n"
@@ -113,7 +114,8 @@ def build_parser():
         help="only messages newer than this one, which is how a watcher asks for what it has not seen",
     )
     parser.add_argument(
-        "--name", help="with find, the text a chat's name holds, matched without case"
+        "--name",
+        help="with find, the text a chat's name or username holds, matched without case",
     )
     parser.add_argument(
         "--search",

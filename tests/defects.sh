@@ -470,6 +470,12 @@ defect 'topic/title-guess' 'tg_agentd/handler.py' \
   '        if False:' \
   'a title two topics share marks the first of them read, and the far side sees a conversation read that nobody opened'
 
+# A username reaches a chat its title would not find, and it is the name people type
+defect 'find/username' 'tg_agentd/handler.py' \
+  '            if held not in name.casefold() and held not in username.casefold():' \
+  '            if held not in name.casefold():' \
+  'a chat known by its username cannot be found by it, so a reader who knows only the username of a channel never reaches it'
+
 # Looking a chat up by name reports the name of a chat the grant does not let the agent
 # read; chat-info is refused there for the same reason
 defect 'find/write-only' 'tg_agentd/handler.py' \

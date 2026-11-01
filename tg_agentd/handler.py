@@ -570,7 +570,7 @@ class Handler:
         file is not found, because finding it would mean reading every dialog the account
         holds, which is the grant `dialogs` exists for.
         """
-        wanted = str(request.get("name") or "").strip()
+        wanted = str(request.get("name") or "").strip().lstrip("@").strip()
         if not wanted:
             raise BadFind("find needs a name to look for")
         found = []
@@ -581,13 +581,20 @@ class Handler:
                 # A folder can name a chat the account has left. That is not an answer,
                 # and the rest of the search still is
                 continue
-            name = profile.describe(entity, private=False)
+            described = profile.describe(entity, private=False)
             # A person's name is one field and a chat's is the other; that split is the
             # profile module's business, so nothing is spelled again here
-            name = name.get("name") or name.get("title") or ""
-            if wanted.casefold() not in name.casefold():
+            name = described.get("name") or described.get("title") or ""
+            username = described.get("username") or ""
+            # A username is what people type to reach a chat, so it is searched beside the
+            # title: a reader looking for a channel knows one or the other
+            held = wanted.casefold()
+            if held not in name.casefold() and held not in username.casefold():
                 continue
-            found.append({"chat": chat, "name": name})
+            entry = {"chat": chat, "name": name}
+            if username:
+                entry["username"] = username
+            found.append(entry)
         return _allowed(None, "find", {"chats": found})
 
     async def _readable_chats(self):

@@ -29,13 +29,19 @@ def store(tmp_path):
 
 @pytest.fixture
 def ask(store):
-    fake = FakeClient(
-        entities={
+    return ask_over(
+        store,
+        {
             CLUB: Channel(id=2303572307, title="Technical club", megagroup=True),
             ANNA: User(id=ANNA, first_name="Anna", last_name="Lee"),
             TEAMMATE: User(id=TEAMMATE, first_name="Anna", last_name="Smith"),
-        }
+        },
     )
+
+
+def ask_over(store, entities):
+    """A handler over the given entities, and the calls it made."""
+    fake = FakeClient(entities=entities)
     served = handler.Handler(store, client_module.Client(fake))
 
     def call(request):
@@ -102,6 +108,45 @@ def test_a_folder_that_grants_no_read_holds_no_names(store):
 
 def test_a_name_no_readable_chat_holds_answers_an_empty_list(ask):
     assert found(ask({"action": "find", "name": "Nobody"})) == []
+
+
+# A chat is known by the username people type as well as by the title the app shows, and
+# a username reaches the chat the name alone would not find
+def test_a_username_finds_the_chat_it_names(store):
+    ask = ask_over(
+        store,
+        {CLUB: Channel(id=2303572307, title="Technical club", username="tech_club")},
+    )
+    assert found(ask({"action": "find", "name": "tech_cl"})) == [
+        {"chat": CLUB, "name": "Technical club", "username": "tech_club"}
+    ]
+
+
+def test_a_username_can_be_given_with_its_at_sign(store):
+    ask = ask_over(
+        store,
+        {CLUB: Channel(id=2303572307, title="Technical club", username="tech_club")},
+    )
+    assert found(ask({"action": "find", "name": "@tech_club"})) == [
+        {"chat": CLUB, "name": "Technical club", "username": "tech_club"}
+    ]
+
+
+def test_a_username_matches_whatever_its_case(store):
+    ask = ask_over(
+        store,
+        {CLUB: Channel(id=2303572307, title="Technical club", username="Tech_Club")},
+    )
+    assert [entry["chat"] for entry in found(ask({"action": "find", "name": "TECH_C"}))] == [
+        CLUB
+    ]
+
+
+# A chat with no username is still found by its title, and its answer carries no
+# username rather than an empty one
+def test_a_chat_with_no_username_carries_none(ask):
+    [entry] = found(ask({"action": "find", "name": "club"}))
+    assert "username" not in entry
 
 
 # The account-wide list is a grant of its own, and a search by name must not become one
