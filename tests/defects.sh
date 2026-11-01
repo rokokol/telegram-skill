@@ -470,6 +470,18 @@ defect 'topic/title-guess' 'tg_agentd/handler.py' \
   '        if False:' \
   'a title two topics share marks the first of them read, and the far side sees a conversation read that nobody opened'
 
+# Looking a chat up by name reports the name of a chat the grant does not let the agent
+# read; chat-info is refused there for the same reason
+defect 'find/write-only' 'tg_agentd/handler.py' \
+  '            if "read" in actions:' \
+  '            if True:' \
+  'a chat the agent may only write into tells it the name of the person on the other side, which is reading that chat'
+
+defect 'find/folder-grant' 'tg_agentd/handler.py' \
+  '            if folder_id is None or not self._store.folder_may(folder_id, "read").allowed:' \
+  '            if folder_id is None:' \
+  'a folder that grants only a digest reports the names of every chat inside it, so a summary of unread counts also names the chats it never let the agent read'
+
 # Push. The session receives every update, so a subscription has to be held to its grant
 defect 'push/recheck' 'tg_agentd/handler.py' \
   '                    refusal, _, _ = await self._grant(chat, "read")' \

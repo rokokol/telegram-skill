@@ -34,6 +34,10 @@ class NoSuchTopic(ValueError):
     """A topic named by a request is not one the forum holds."""
 
 
+class BadFind(ValueError):
+    """A search by name that names nothing to look for."""
+
+
 class BadUpload(ValueError):
     """A file in a request that cannot become an upload."""
 
@@ -59,7 +63,7 @@ class Handler:
             return _refused(str(unknown))
         except permissions.PermissionFileError as broken:
             return _refused(str(broken))
-        except (ChatIsNotAForum, NoSuchTopic, BadUpload, BadMarkup) as plain:
+        except (ChatIsNotAForum, NoSuchTopic, BadUpload, BadFind, BadMarkup) as plain:
             return _refused(str(plain))
         except Exception as unexpected:
             # Anything else has to come back as an answer too. Letting it close the
@@ -91,8 +95,7 @@ class Handler:
             return _allowed(None, action, {"folders": listed})
 
         # The account's own profile is the user's to see, so it needs no grant
-        if action == "whoami":
-            return _allowed(
+        if action == "whoami":            return _allowed(
                 None, action, profile.describe(await self._client.me(), private=False)
             )
 
@@ -105,6 +108,14 @@ class Handler:
                     "add dialogs to 'allow: ' in chats/default.conf",
                 )
             return _allowed(decision.by, action, {"chats": await self._dialogs()})
+
+        # Looking a chat up by name reaches the chats a permission file names and the
+        # members of a granting folder, and nothing else: the account's dialog list is a
+        # grant of its own, and a search must not become one
+        if action == "find":
+            if "chat" in request or "folder" in request:
+                return _refused("find looks chats up by name, and takes no chat or folder")
+            return await self._find_chat(request)
 
         # A subscription is a stream of answers, which the socket serves through stream
         if action == "subscribe":
@@ -509,6 +520,48 @@ class Handler:
         # happened is named
         return {key: found for key, found in result.items() if found or key == "written"}
 
+
+    async def _find_chat(self, request):
+        """The chats a grant names and lets this account read, whose name holds a text.
+
+        Nothing here lists the account's dialogs: a chat whose only grant is a default
+        file is not found, because finding it would mean reading every dialog the account
+        holds, which is the grant `dialogs` exists for.
+        """
+        wanted = str(request.get("name") or "").strip()
+        if not wanted:
+            raise BadFind("find needs a name to look for")
+        found = []
+        for chat in await self._readable_chats():
+            try:
+                entity = await self._client.entity(chat)
+            except Exception:
+                # A folder can name a chat the account has left. That is not an answer,
+                # and the rest of the search still is
+                continue
+            name = profile.describe(entity, private=False)
+            # A person's name is one field and a chat's is the other; that split is the
+            # profile module's business, so nothing is spelled again here
+            name = name.get("name") or name.get("title") or ""
+            if wanted.casefold() not in name.casefold():
+                continue
+            found.append({"chat": chat, "name": name})
+        return _allowed(None, "find", {"chats": found})
+
+    async def _readable_chats(self):
+        """The chats a permission file names, or a granting folder holds, that may be read."""
+        held = []
+        for identifier, actions in self._store.survey()["chats"].items():
+            if not str(identifier).lstrip("-").isdigit():
+                continue
+            if "read" in actions:
+                held.append(int(identifier))
+        for folder in await self._client.folders():
+            folder_id = getattr(folder, "id", None)
+            if folder_id is None or not self._store.folder_may(folder_id, "read").allowed:
+                continue
+            held.extend(folders.members_of(folder))
+        return sorted(set(held))
 
     async def _forum_topics(self, chat):
         """The topics of a forum, saying plainly when the chat keeps none."""

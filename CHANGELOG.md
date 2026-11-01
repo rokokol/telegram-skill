@@ -7,6 +7,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 ### Added
 
 - `mark-read --chat CHAT --topic TOPIC` moves one forum topic's read position, which is the only call that clears that topic's counter: the read names the topic as a thread and stops at the topic's newest message, or at `--id` when the caller read less than all of it. `--topic` takes a title as well as a number, so the topic the app names can be addressed without looking its number up; a title two topics share is a refusal naming both numbers, because a guess marks a conversation the user never opened read
+- `find --name TEXT` answers the chats whose own name holds the text, without case: a chat a permission file names, and a member of a folder that grants `read`. The name comes from the same description `chat-info` gives, under the same grant, so a chat the agent may only write into stays unnamed. Nothing here reads the account's dialog list, which is what `dialogs` is for
 
 ## 2026-10-28
 

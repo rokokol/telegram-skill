@@ -43,8 +43,10 @@ def build_parser():
             "  tg.py whoami\n"
             "  tg.py chat-info --chat 777\n"
             "  tg.py read --chat -1001234567890 --limit 20\n"
+            "  tg.py topics --chat -1001234567890\n"
             "  tg.py read --chat -1001234567890 --topic 'Newcomers 1'\n"
             "  tg.py mark-read --chat -1001234567890 --topic 'Newcomers 1'\n"
+            "  tg.py find --name 'club'\n"
             "  tg.py read --chat 777 --ids 12\n"
             "  tg.py react --chat 777 --id 12 --reactions '👍'\n"
             "  tg.py react --chat 777 --id 12 --reactions\n"
@@ -62,8 +64,10 @@ def build_parser():
     parser.add_argument(
         "action",
         help="the action to ask for; 'permissions' lists what is held, 'whoami' describes "
-        "the account, 'chat-info' the other side of a chat under its read grant; "
-        "'read' includes reaction counts and choices, 'react' sets reactions under write",
+        "the account, 'chat-info' the other side of a chat under its read grant; 'topics' "
+        "lists a forum's topics with their numbers and unread counts, 'find' looks up the "
+        "chats a grant names by their name; 'read' includes reaction counts and choices, "
+        "'react' sets reactions under write",
     )
     parser.add_argument(
         "--chat",
@@ -109,6 +113,9 @@ def build_parser():
         help="only messages newer than this one, which is how a watcher asks for what it has not seen",
     )
     parser.add_argument(
+        "--name", help="with find, the text a chat's name holds, matched without case"
+    )
+    parser.add_argument(
         "--search",
         help="ask the server for messages holding this text, instead of reading history",
     )
@@ -136,6 +143,7 @@ def request_from(options):
         "add": options.add,
         "remove": options.remove,
         "limit": options.limit,
+        "name": options.name,
         "search": options.search,
         "topic": options.topic,
         "since": options.since,
