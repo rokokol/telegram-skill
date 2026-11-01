@@ -50,6 +50,10 @@ cmd_lint() {
   echo "== the scripts parse and lint"
   ./check-sh.sh tests/check.sh
 
+  echo "== the login wrapper lints, and is laid out like every other script"
+  shellcheck systemd/tg-agent-login
+  shfmt -d systemd/tg-agent-login
+
   echo "== the workflows are valid, and their tools come from the lock rather than a registry"
   actionlint
   ./check-pins.sh
