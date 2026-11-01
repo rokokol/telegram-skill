@@ -1,0 +1,113 @@
+name: arch
+
+# The Arch half of the repository: the PKGBUILD, the units it installs and the login
+# wrapper. The base image is a dated tag rather than `latest`, because Arch is rolling and
+# `latest` would be a different job every day; pacman then still reaches a mirror, which
+# makes this the one job in the gate that depends on something outside the repository
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: the ref to check out, so a bot can verify a branch with this very workflow
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: archlinux/archlinux:base-devel-20261101.0.620341
+    steps:
+      # makepkg refuses to run as root and the container starts as root; git is what the
+      # checkout below needs, and the image does not carry it
+      - name: the tools the build needs, and a user to build as
+        run: |
+          pacman -Syu --noconfirm --needed git python-build python-installer python-setuptools python-wheel
+          useradd -m builder
+
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: build the package out of the tree under test
+        run: |
+          set -euo pipefail
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          cd packaging/arch
+          # The PKGBUILD fetches the repository's default branch, which is not what a pull
+          # request changes, so this copy fetches the checkout under test instead. Not one
+          # other line of the file differs
+          sed -i "s|^source=.*|source=(\"telegram-skill::git+file://$GITHUB_WORKSPACE\")|" PKGBUILD
+          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --nodeps --noconfirm"
+          printf '%s\n' ./*.pkg.tar.zst
+
+      # The list comes from the repository rather than from the PKGBUILD, so a file added
+      # to systemd/ and forgotten in package() fails here instead of at install time
+      - name: the package holds every file the repository ships
+        run: |
+          set -euo pipefail
+          cd packaging/arch
+          tar -tf "$(printf '%s\n' ./*.pkg.tar.zst | head -1)" | sort > /tmp/contents
+          missing=0
+          check() {
+            grep -qx "$1" /tmp/contents || {
+              printf 'the package lacks %s\n' "$1" >&2
+              missing=1
+            }
+          }
+          for path in "$GITHUB_WORKSPACE"/systemd/*; do
+            case "$(basename "$path")" in
+              tg-agent-login) check usr/bin/tg-agent-login ;;
+              *.tmpfiles) check usr/lib/tmpfiles.d/tg-agent.conf ;;
+              *) check "usr/lib/systemd/system/$(basename "$path")" ;;
+            esac
+          done
+          check usr/bin/tg-agentd
+          for path in "$GITHUB_WORKSPACE"/SKILL.md "$GITHUB_WORKSPACE"/tg.py \
+                      "$GITHUB_WORKSPACE"/tg-watch.py "$GITHUB_WORKSPACE"/agentsock.py; do
+            check "usr/share/tg-agent/skill/$(basename "$path")"
+          done
+          for path in "$GITHUB_WORKSPACE"/references/*.md; do
+            check "usr/share/tg-agent/skill/references/$(basename "$path")"
+          done
+          exit "$missing"
+
+      # systemd parses the installed units, and a command a unit runs must either come
+      # from the package or exist on the system: missing from both is a file package()
+      # was meant to install
+      - name: systemd accepts the units the package installs
+        run: |
+          set -euo pipefail
+          cd packaging/arch
+          root=/tmp/installed
+          mkdir -p "$root"
+          tar -xf "$(printf '%s\n' ./*.pkg.tar.zst | head -1)" -C "$root"
+          said=$(systemd-analyze verify --root="$root" "$root"/usr/lib/systemd/system/* 2>&1 || true)
+          printf '%s\n' "$said"
+          finding=0
+          while IFS= read -r line; do
+            case "$line" in
+              '') ;;
+              *' is not executable: '*)
+                path=$(printf '%s\n' "$line" | sed -n 's/.*Command \(\/[^ ]*\) is not executable.*/\1/p')
+                if [[ -x "$path" ]]; then
+                  printf 'runs the system'"'"'s %s\n' "$path"
+                else
+                  printf 'a unit runs %s, and the package does not install it\n' "$path" >&2
+                  finding=1
+                fi
+                ;;
+              *)
+                finding=1
+                ;;
+            esac
+          done <<<"$said"
+          exit "$finding"

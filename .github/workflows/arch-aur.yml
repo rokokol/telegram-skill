@@ -1,0 +1,53 @@
+name: arch-aur
+
+# The two packages tg-agent-git depends on live in the AUR, so installing it depends as
+# much on somebody else's repository as on this one. That is why this runs on a schedule
+# and by hand and never on a pull request: until the log says otherwise, a red here is the
+# AUR's or a mirror's
+on:
+  schedule:
+    # Monday, 05:17 UTC, off the hour, so a busy mirror is not this job's fault
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    container:
+      image: archlinux/archlinux:base-devel-20261101.0.620341
+    steps:
+      - name: the tools an AUR build needs, and a user to build as
+        run: |
+          pacman -Syu --noconfirm --needed git python sudo
+          useradd -m builder
+          printf 'builder ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/builder
+
+      - uses: actions/checkout@v7
+
+      # check() of a third-party PKGBUILD is that package's own business and often needs
+      # the network; what this job answers is whether the pair builds and installs
+      - name: build the AUR pair, then the package itself
+        run: |
+          set -euo pipefail
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+          cd packaging/arch
+          sed -i "s|^source=.*|source=(\"telegram-skill::git+file://$GITHUB_WORKSPACE\")|" PKGBUILD
+          su builder -c "
+            set -euo pipefail
+            for package in python-cryptg python-telethon; do
+              rm -rf /tmp/aur/\$package
+              git clone -q https://aur.archlinux.org/\$package.git /tmp/aur/\$package
+              (cd /tmp/aur/\$package && makepkg -si --noconfirm --nocheck)
+            done
+            cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg -si --noconfirm --nocheck
+          "
+
+      - name: the installed service starts, with the pair it needs
+        run: |
+          set -euo pipefail
+          tg-agentd --help >/dev/null
+          python -c 'import cryptg, qrcode, telethon; print("telethon", telethon.__version__)'

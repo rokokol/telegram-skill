@@ -9,10 +9,10 @@
 ![Telethon](https://img.shields.io/badge/Telethon-2CA5E0?style=flat&logo=telegram&logoColor=white)
 ![systemd](https://img.shields.io/badge/systemd-30D475?style=flat&logo=systemd&logoColor=white)
 ![Nix](https://img.shields.io/badge/Nix-5277C3?style=flat&logo=nixos&logoColor=white)
-![Arch Linux](https://img.shields.io/badge/Arch_Linux-1793D1?style=flat&logo=archlinux&logoColor=white)
 [![license](https://img.shields.io/badge/MIT-3DA639?style=flat)](LICENSE)
 [![ci](https://github.com/rokokol/telegram-skill/actions/workflows/build.yml/badge.svg)](https://github.com/rokokol/telegram-skill/actions/workflows/build.yml)
 [![falsify](https://github.com/rokokol/telegram-skill/actions/workflows/falsify.yml/badge.svg)](https://github.com/rokokol/telegram-skill/actions/workflows/falsify.yml)
+[![arch](https://github.com/rokokol/telegram-skill/actions/workflows/arch.yml/badge.svg)](https://github.com/rokokol/telegram-skill/actions/workflows/arch.yml)
 
 </div>
 
