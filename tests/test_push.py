@@ -271,6 +271,39 @@ def test_the_socket_streams_events_and_lets_go_when_the_reader_leaves(world, tmp
     run(scenario)
 
 
+# A reader that leaves while the service waits for the next message cancels the read
+# under the stream. The session ends there, and the journal must hear of no fault: an
+# aclose of a generator still running reached it as an unhandled exception, once per
+# watcher that stopped
+def test_a_reader_that_leaves_mid_stream_faults_nothing(world, tmp_path):
+    path = str(tmp_path / "s")
+
+    async def scenario():
+        service, account, fake, grant = await started(world)
+        grant(777, "read")
+        loop = asyncio.get_running_loop()
+        faults = []
+        loop.set_exception_handler(lambda loop, context: faults.append(context))
+        served = asyncio.ensure_future(server.Server(service).serve_forever(path=path))
+        while not Path(path).exists():
+            await asyncio.sleep(0.01)
+        reader, writer = await asyncio.open_unix_connection(path)
+        writer.write(b'{"action": "subscribe", "chat": 777}\n')
+        await writer.drain()
+        assert json.loads(await reader.readline())["ok"] is True
+        writer.close()
+        await writer.wait_closed()
+        for _ in range(100):
+            if account.hub.count(777) == 0:
+                break
+            await asyncio.sleep(0.01)
+        await asyncio.sleep(0.05)
+        served.cancel()
+        assert faults == []
+
+    run(scenario)
+
+
 def test_the_client_reads_a_live_stream_line_by_line(world, tmp_path):
     import importlib.util
 

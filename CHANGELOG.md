@@ -13,6 +13,7 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 - `read --topic N` handed any number straight to Telegram, which answers with the thread of whatever message carries it: a number that named no topic returned another conversation instead of refusing it, and a subscription naming one filtered every message out in silence. A number is now held to the list the forum answers with, as a title already was
 - `read --topic 1` read whatever message 1's thread happens to be, and in a bot's chat answered `PeerIdInvalidError`. General is the chat's own messages and has no thread to read, so a read refuses it with the sentence that names where those messages are read. `mark-read --topic 1` and `subscribe --topic 1` still move and filter it, and now resolve it even when the forum's list leaves General out
 - A post into a bot's forum topic read as an answer to the topic itself, because that forum names the topic as both the answered message and the top; the two being one number is the place the message sits in, not an answer
+- A subscriber that left while the service waited for the next message ended its session with `RuntimeError: aclose(): asynchronous generator is already running`, which the journal reported as an unhandled exception once per `tg-watch.py` that stopped. The read under the stream now settles before the stream closes
 - `SKILL.md` said a read message carries no date, which had been wrong since 2026-10-24; the field list there is now the one the service sends
 
 ## 2026-11-01

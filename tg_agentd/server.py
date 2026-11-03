@@ -143,7 +143,11 @@ class Server:
                     {following, left}, return_when=asyncio.FIRST_COMPLETED
                 )
                 if following not in done:
+                    # The read under the stream has to settle before the stream is closed:
+                    # closing a generator that is still running raises, and that fault
+                    # reached the journal once per watcher that stopped
                     following.cancel()
+                    await asyncio.gather(following, return_exceptions=True)
                     return
                 try:
                     answer = following.result()
