@@ -115,7 +115,9 @@ def test_a_silent_service_is_reported_with_the_line_that_restarts_it(
     printed = capsys.readouterr().err
     assert status == 3
     assert "tg-agent.service" in printed
-    assert "systemctl restart" in printed
+    # The command has to be one the caller can run: polkit refuses a plain restart for
+    # the account that reads the socket
+    assert "sudo systemctl restart tg-agent.service" in printed
     assert "Traceback" not in printed
 
 
