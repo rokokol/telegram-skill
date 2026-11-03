@@ -842,10 +842,15 @@ def _answered(message):
     header = getattr(message, "reply_to", None)
     if header is None:
         return None
-    in_topic = getattr(header, "forum_topic", None)
-    if in_topic and not getattr(header, "reply_to_top_id", None):
+    answered = getattr(header, "reply_to_msg_id", None)
+    topic = getattr(header, "reply_to_top_id", None)
+    # A bot's forum names the topic as the message a post answers as well as its top, so
+    # the two being one number is the place the message sits in, not an answer
+    if answered is None or answered == topic:
         return None
-    return getattr(header, "reply_to_msg_id", None)
+    if getattr(header, "forum_topic", None) and not topic:
+        return None
+    return answered
 
 
 def _forwarded(message):
@@ -909,6 +914,8 @@ def _message(message):
         # The name the chat shows, from the sender Telethon already holds: no request
         "from_name": _display_name(getattr(message, "sender", None)),
         "out": getattr(message, "out", False),
+        # The thread it is in, so a flat read of a forum is groupable by conversation
+        "topic": _thread_of(message),
         "reply_to": _answered(message),
         "forwarded_from": _forwarded(message),
         "media": kind,
@@ -969,16 +976,27 @@ class _General:
     top_message = 0
 
 
-def _topic_of(message):
-    """The forum topic a message is in, read from its reply header.
+def _thread_of(message):
+    """The forum topic a message is in, or None when it is among the chat's own.
 
-    A message posted in a topic replies to the topic itself; one answering another
-    message names the topic as its top. General carries no forum header at all.
+    A message posted in a topic replies to the topic itself, with no top under it; one
+    answering another message names the topic as its top. General carries no header at
+    all, so its messages are the chat's own.
     """
     header = getattr(message, "reply_to", None)
-    if header is None or not getattr(header, "forum_topic", None):
-        return GENERAL_TOPIC
-    return getattr(header, "reply_to_top_id", None) or header.reply_to_msg_id
+    if header is None:
+        return None
+    top = getattr(header, "reply_to_top_id", None)
+    if top:
+        return top
+    if getattr(header, "forum_topic", None):
+        return getattr(header, "reply_to_msg_id", None)
+    return None
+
+
+def _topic_of(message):
+    """The forum topic a message is in, naming General for the chat's own messages."""
+    return _thread_of(message) or GENERAL_TOPIC
 
 
 def _with_folder(answer, through):

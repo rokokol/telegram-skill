@@ -112,6 +112,41 @@ def test_a_reply_names_the_message_it_answers_but_a_topic_post_does_not(store):
     assert [m["reply_to"] for m in got] == [4, None, 4]
 
 
+# A forum's messages are spread over its threads, and a flat read of one is otherwise a
+# list of sentences with no way to tell which conversation each of them belongs to
+def test_a_message_names_the_thread_it_is_in(store):
+    in_a_topic = t.MessageReplyHeader(reply_to_msg_id=100, forum_topic=True)
+    a_bot_forum_post = t.MessageReplyHeader(
+        reply_to_msg_id=200, forum_topic=True, reply_to_top_id=200
+    )
+    answering_in_a_topic = t.MessageReplyHeader(
+        reply_to_msg_id=4, forum_topic=True, reply_to_top_id=200
+    )
+    got = read(
+        store,
+        [
+            Message(id=1, text="general", sender_id=7),
+            Message(id=2, text="a topic", sender_id=7, reply_to=in_a_topic),
+            Message(id=3, text="a bot's topic", sender_id=7, reply_to=a_bot_forum_post),
+            Message(id=4, text="answering", sender_id=7, reply_to=answering_in_a_topic),
+        ],
+    )
+    assert [m["topic"] for m in got] == [None, 100, 200, 200]
+
+
+# A bot's forum names the topic as both the message a post answers and the thread it is in.
+# That is where the message is, not what it answers, so it answers nothing
+def test_a_post_into_a_bots_topic_answers_nothing(store):
+    into_the_topic = t.MessageReplyHeader(
+        reply_to_msg_id=200, forum_topic=True, reply_to_top_id=200
+    )
+    [message] = read(
+        store, [Message(id=3, text="x", sender_id=7, reply_to=into_the_topic)]
+    )
+    assert message["reply_to"] is None
+    assert message["topic"] == 200
+
+
 def test_a_forward_names_where_it_came_from(store):
     named = t.MessageFwdHeader(date=None, from_name="Hidden Person")
     from_channel = t.MessageFwdHeader(date=None, from_id=t.PeerChannel(channel_id=55))
