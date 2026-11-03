@@ -55,6 +55,13 @@ RETRY_PAUSE = 2
 RETRY_CAP = 60
 GIVE_UP_AFTER = 8
 
+# A link Telethon reports as connected can be dead: a failed reconnect once nulled the
+# connection under its loops, the send loop died on the attribute error with nothing to
+# await it, and the flag said connected while the service answered nothing. A real request
+# every PROBE_INTERVAL tells that state from a live session, and a rebuild that does not
+# help is counted until the process leaves the restart to systemd
+PROBE_INTERVAL = 60
+
 
 class Client:
     """The account, reached through the calls the permission vocabulary allows.
@@ -95,37 +102,67 @@ class Client:
         return self._telethon.is_connected()
 
     async def reconnect(self):
-        """Join Telegram again, and say the account is away once more.
+        """Rebuild the link to Telegram, and say the account is away once more.
 
-        A session that arrives is a session that shows its requests as activity, so the
-        offline status has to be sent again on the new connection
+        The disconnect comes first because Telethon's own `connect` refuses a sender that
+        still calls itself connected, and a sender that keeps that flag while its
+        transport is gone is exactly what a failed reconnect leaves behind: the service
+        went on believing it was online and answered nothing. A session that arrives is a
+        session that shows its requests as activity, so the offline status is sent again
         """
+        await self._telethon.disconnect()
         await self._telethon.connect()
         await self._telethon(UpdateStatusRequest(offline=True))
 
     async def watch(self):
         """Keep the link up, and give up once the outage outlives the budget.
 
-        False means the service could not reach Telegram for the whole budget. The caller
-        ends the process on it: a restart is the only thing left that systemd can see, and
-        RestartSec becomes the pause before the next attempt
+        False means the service could not reach Telegram for the whole budget, or kept a
+        connection it could no longer answer through. The caller ends the process on it: a
+        restart is the only thing left that systemd can see, and RestartSec becomes the
+        pause before the next attempt
         """
         failures = 0
+        since_probe = 0.0
         while True:
             await asyncio.sleep(WATCH_INTERVAL)
-            if self.connected():
+            since_probe += WATCH_INTERVAL
+            # The connection flag is Telethon's own bookkeeping, and a reconnect that
+            # fails leaves it saying the truth about an object that is gone. Only a
+            # request that comes back tells a live link from that, and the wait keeps the
+            # request to one every PROBE_INTERVAL while the link is healthy
+            if self.connected() and since_probe < PROBE_INTERVAL:
+                continue
+            since_probe = 0.0
+            if await self._answering():
                 failures = 0
                 continue
+            # A link that answers nothing is rebuilt from nothing, which is the part a
+            # plain connect cannot do; a rebuild that does not help is counted, and the
+            # budget runs out into the restart
             try:
                 await self.reconnect()
             except Exception:
-                failures += 1
-                if failures >= GIVE_UP_AFTER:
-                    return False
-                pause = min(RETRY_PAUSE * 2 ** (failures - 1), RETRY_CAP)
-                await asyncio.sleep(pause)
-            else:
-                failures = 0
+                pass
+            failures += 1
+            if failures >= GIVE_UP_AFTER:
+                return False
+            pause = min(RETRY_PAUSE * 2 ** (failures - 1), RETRY_CAP)
+            await asyncio.sleep(pause)
+
+    async def _answering(self):
+        """Whether a real request still reaches Telegram through this session.
+
+        The status is the cheapest request the session makes and the one this service
+        sends anyway, so asking proves the link without spending anything extra
+        """
+        if not self.connected():
+            return False
+        try:
+            await self._telethon(UpdateStatusRequest(offline=True))
+        except Exception:
+            return False
+        return True
 
     async def own_id(self):
         """The account's identifier, which is also the identifier of its saved messages."""

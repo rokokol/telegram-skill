@@ -251,8 +251,8 @@ async def run(options):
         )
         if watching in done and not serving.done():
             print(
-                "tg-agentd: Telegram stayed unreachable; exiting so that systemd "
-                "restarts the service",
+                "tg-agentd: the link to Telegram stopped answering; exiting so that "
+                "systemd restarts the service",
                 file=sys.stderr,
             )
             raise SystemExit(os.EX_TEMPFAIL)

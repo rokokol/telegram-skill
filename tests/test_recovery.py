@@ -118,11 +118,88 @@ def test_the_pause_between_reconnect_attempts_grows(fake, monkeypatch):
     monkeypatch.setattr(client_module, "RETRY_CAP", 0.08)
     monkeypatch.setattr(client_module, "GIVE_UP_AFTER", 3)
     account = client_module.Client(fake)
+    # The service starts once, and every connect after that is an attempt to come back
+    asyncio.run(account.start())
     asyncio.run(asyncio.wait_for(account.watch(), 2))
     gaps = [round(b - a, 3) for a, b in zip(fake.attempts, fake.attempts[1:])]
     assert len(fake.attempts) == 3, fake.attempts
     assert gaps[1] > gaps[0] * 1.5, gaps
     assert gaps[0] > 0.005, "the second attempt came with no pause, as Telethon does it"
+
+
+class _Stuck(FakeClient):
+    """A session whose flag says connected while its transport is gone.
+
+    This is what a failed reconnect left behind on 2026-10-30: the connection under the
+    loops was nulled, the send loop died on the attribute error with nothing to await it,
+    and `is_connected` still said yes because it answers from a flag. A plain `connect`
+    cannot repair it, because Telethon refuses a sender that still calls itself connected
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.deaf = True
+
+    def is_connected(self):
+        return True
+
+    async def __call__(self, request):
+        self._record("raw", request=type(request).__name__)
+        if self.deaf:
+            raise ConnectionError("the transport is gone")
+        return None
+
+    async def disconnect(self):
+        self._record("disconnect")
+        self.deaf = True
+
+    async def connect(self):
+        self._record("connect")
+        if not self.called("disconnect"):
+            # What Telethon answers a sender that still calls itself connected
+            return False
+        self.deaf = False
+
+
+class _Deaf(_Stuck):
+    """The same, except that no rebuild reaches Telegram either."""
+
+    async def connect(self):
+        self._record("connect")
+        return True
+
+
+def short_watch(monkeypatch):
+    monkeypatch.setattr(client_module, "UpdateStatusRequest", _FakeStatusRequest)
+    monkeypatch.setattr(client_module, "WATCH_INTERVAL", 0.001)
+    monkeypatch.setattr(client_module, "PROBE_INTERVAL", 0.005)
+    monkeypatch.setattr(client_module, "RETRY_PAUSE", 0.001)
+    monkeypatch.setattr(client_module, "RETRY_CAP", 0.002)
+
+
+def test_a_link_that_calls_itself_connected_is_rebuilt(monkeypatch):
+    short_watch(monkeypatch)
+    fake = _Stuck()
+    account = client_module.Client(fake)
+    with pytest.raises(TimeoutError):
+        asyncio.run(asyncio.wait_for(account.watch(), 0.3))
+    assert fake.called("disconnect"), "the dead state was left standing"
+    assert fake.called("connect")
+    assert fake.deaf is False, "the link was never rebuilt, only reconnected"
+
+
+def test_a_link_that_never_answers_leaves_the_restart_to_systemd(monkeypatch):
+    short_watch(monkeypatch)
+    monkeypatch.setattr(client_module, "GIVE_UP_AFTER", 3)
+    fake = _Deaf()
+    account = client_module.Client(fake)
+    went = asyncio.run(asyncio.wait_for(account.watch(), 2))
+    assert went is False, "a link that answered nothing kept the service alive"
+    probes = [
+        call for call in fake.called("raw") if call["request"] == "_FakeStatusRequest"
+    ]
+    assert len(probes) >= 3, probes
+    assert len(fake.called("connect")) >= 3, "the link was never rebuilt at all"
 
 
 def test_the_service_asks_systemd_for_a_restart_when_telegram_stays_gone(
