@@ -186,10 +186,11 @@ class Handler:
             request = await self._saved(request)
             chat = permissions.as_identifier(request.get("chat"))
             refusal, by, through = await self._grant(chat, "read")
-            # A title names a topic only through the forum's own list, so it is turned
-            # into a number once, before the first message arrives
+            # A topic is known only through the forum's own list, so the name or the
+            # number is turned into one once, before the first message arrives: a number
+            # no topic holds would filter every message out and never say why
             if topic is not None:
-                topic = await self._topic_id(chat, topic)
+                topic = getattr(await self._topic(chat, topic), "id", None)
         except permissions.BadIdentifier as bad:
             yield _refused(f"bad identifier: {bad}")
             return
@@ -323,11 +324,11 @@ class Handler:
             if request.get("search"):
                 terms["search"] = request["search"]
             # A forum keeps its messages inside topics, and one topic is one conversation.
-            # A topic is named by its number, or by the title the app shows, which costs
-            # one request to turn into a number
+            # A topic is named by its number, or by the title the app shows, and either
+            # way costs one request to be held to what the forum lists
             named = request.get("topic")
             if named is not None:
-                terms["reply_to"] = await self._topic_id(chat, named)
+                terms["reply_to"] = await self._thread(chat, named)
             # Everything newer than a message already seen, which is how a watcher asks
             # for what it has not read rather than for the last N
             if request.get("since"):
@@ -658,11 +659,17 @@ class Handler:
     async def _topic(self, chat, wanted):
         """The forum topic a request names, by number or by the title the app shows.
 
-        A title carries no number, so it is matched whole and without case against the
-        forum's own list. Two topics of one name and none at all are refusals: a guess
-        marks the wrong conversation read, which the other side can see.
+        The forum's own list is the only thing that says which numbers are topics. A
+        number passed straight to Telegram asks for the thread of whatever message
+        carries it, and answers with another conversation rather than a refusal. General
+        is the one topic no list has to name, and no message starts it.
         """
         text = str(wanted).strip()
+        if text.casefold() == GENERAL_TITLE.casefold() or text == str(GENERAL_TOPIC):
+            # The list is still asked for, because a chat that keeps no topics keeps no
+            # General either, and a chat named wrongly has to hear that
+            await self._forum_topics(chat)
+            return _General()
         if text.isdigit():
             identifier = int(text)
             for topic in await self._forum_topics(chat):
@@ -687,12 +694,22 @@ class Handler:
             )
         return found[0]
 
-    async def _topic_id(self, chat, wanted):
-        """A topic's number, listing the forum only when the request named a title."""
-        text = str(wanted).strip()
-        if text.isdigit():
-            return int(text)
-        return getattr(await self._topic(chat, wanted), "id", None)
+    async def _thread(self, chat, wanted):
+        """The thread a read or a subscription names, asking for a topic that is one.
+
+        General is where the chat's own messages live, and it has no thread to read: the
+        message that would start one does not exist, so the number points at whatever
+        carries it, and in a bot's chat answers a library error instead.
+        """
+        topic = await self._topic(chat, wanted)
+        identifier = getattr(topic, "id", None)
+        if identifier == GENERAL_TOPIC:
+            raise NoSuchTopic(
+                "topic 1 is General, and it is the chat's own messages rather than a "
+                "thread: read the chat without --topic, and each message says which "
+                "thread it is in"
+            )
+        return identifier
 
     async def _mark_topic(self, chat, request):
         """Mark one forum topic read, and say which message the read reached.
@@ -937,8 +954,19 @@ def _allowed(by, action, result):
     }
 
 
-# The topic a forum keeps for whatever names no other one
+# The topic a forum keeps for whatever names no other one, and the title the app shows
+# for it. It is the chat's own read position and its own messages, not a thread of its own
 GENERAL_TOPIC = 1
+GENERAL_TITLE = "General"
+
+
+class _General:
+    """General as a topic a list may leave out, so every caller reads it the same way."""
+
+    id = GENERAL_TOPIC
+    title = GENERAL_TITLE
+    unread_count = 0
+    top_message = 0
 
 
 def _topic_of(message):

@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from telethon.tl import types as t
 
-from tests.fake_telethon import FakeClient, Message
+from tests.fake_telethon import FakeClient, FakeTopic, Message
 from tg_agentd import client as client_module
 from tg_agentd import handler, permissions, server
 
@@ -45,7 +45,13 @@ def world(tmp_path, monkeypatch):
                 photos=[],
                 documents=[],
             )
-        }
+        },
+        # The forum these subscriptions name topics of, because a topic is known only
+        # through the list the forum itself answers with
+        topics=[
+            FakeTopic(id=17, title="Work", unread_count=1, top_message=3),
+            FakeTopic(id=18, title="Home", unread_count=0, top_message=4),
+        ],
     )
     account = client_module.Client(fake)
     service = handler.Handler(permissions.Store(tmp_path), account)
@@ -163,6 +169,20 @@ def test_a_topic_subscription_carries_only_that_topic(world):
         got = [(await anext(stream))["message"]["text"] for _ in range(2)]
         assert got == ["posted", "answered"]
         await stream.aclose()
+
+    run(scenario)
+
+
+# A subscription names a topic only through the forum's own list, or a number that names
+# nothing would filter every message out and never say why
+def test_a_topic_subscription_naming_no_topic_is_refused(world):
+    async def scenario():
+        service, account, fake, grant = await started(world)
+        grant(-100, "read")
+        stream = service.stream({"action": "subscribe", "chat": -100, "topic": 4242})
+        first = await anext(stream)
+        assert first["ok"] is False
+        assert "no topic 4242" in first["error"]
 
     run(scenario)
 

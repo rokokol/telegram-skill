@@ -102,16 +102,55 @@ def test_a_title_matches_whatever_its_case(ask):
     assert ask.fake.called("get_messages")[0]["reply_to"] == 17
 
 
-# A number is an identifier rather than a title, so a read by number costs no extra
-# request: the list of topics is only there to turn a title into one
-def test_a_topic_read_by_number_asks_for_no_topic_list(ask):
-    ask({"action": "read", "chat": CHAT, "topic": 17})
+# The forum's own list is the only thing that says which numbers are topics. A number
+# handed straight to Telegram asks for the thread of whatever message carries it, so a
+# number that names no topic answers with another conversation instead of a refusal
+def test_a_topic_read_by_number_is_held_to_the_forums_list(ask):
+    answer = ask({"action": "read", "chat": CHAT, "topic": 4242})
+    assert answer["ok"] is False
+    assert "no topic 4242" in answer["error"]
+    assert not ask.fake.called("get_messages")
+
+
+def test_a_topic_read_by_number_asks_the_forum_for_its_topics(ask):
+    answer = ask({"action": "read", "chat": CHAT, "topic": 17})
+    assert answer["ok"] is True, answer
     listed = [
         called
         for called in ask.fake.called("raw")
         if called["request"] == "GetForumTopicsRequest"
     ]
-    assert listed == []
+    assert listed != []
+
+
+# General is the chat's own messages rather than a thread: no message starts it, so asking
+# Telegram for message 1's thread answers whatever that number happens to point at, and in
+# a bot's chat it answers a library error instead
+def test_general_is_not_read_as_a_thread(ask):
+    answer = ask({"action": "read", "chat": CHAT, "topic": 1})
+    assert answer["ok"] is False
+    assert "General" in answer["error"]
+    assert not ask.fake.called("get_messages")
+
+
+def test_general_is_not_read_as_a_thread_by_its_title(ask):
+    answer = ask({"action": "read", "chat": CHAT, "topic": "general"})
+    assert answer["ok"] is False
+    assert "General" in answer["error"]
+    assert not ask.fake.called("get_messages")
+
+
+# A forum always keeps General, and a list may leave it out, so the position still has to
+# move there. A chat that keeps no topics still refuses, because the list says so
+def test_general_moves_the_chats_own_position_when_the_list_omits_it(store):
+    ask = serve(
+        store, topics=[FakeTopic(id=17, title="Work", unread_count=4, top_message=967)]
+    )
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 1})
+    assert answer["ok"] is True, answer
+    assert answer["result"]["general"] is True
+    assert ask.fake.called("send_read_acknowledge")
+    assert not ask.fake.called("raw_topic_read")
 
 
 def test_a_title_the_forum_lacks_is_refused_whole(ask):
