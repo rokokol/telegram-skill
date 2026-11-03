@@ -58,5 +58,6 @@ This holds for a message the user themself sent in a chat. The service gates an 
 - Reporting a chat's unread count as the state of its topics, when a chat-wide read leaves every topic counter where it was
 - Deleting for everyone where the user meant their own view — the two are separate permissions and separate words
 - Treating an empty answer as an empty chat, when it was a refusal
+- Retrying a call that ended at its deadline: the service took the connection and wrote nothing, so repeat nothing, and tell the user that the service is not answering and which command restarts it
 
 The format of the permission files, and what the user has to do to change one, is in [references/permissions.md](references/permissions.md). The first login and what the service needs to run is in [references/setup.md](references/setup.md)

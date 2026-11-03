@@ -17,6 +17,14 @@ from agentsock import SentLog, ask, stream  # noqa: F401  — stream is for tg-w
 
 DEFAULT_SOCKET = os.environ.get("TG_SOCKET", "/run/tg-agent/socket")
 
+# What a caller is told when the service holds the connection and writes nothing. The fault
+# is the service rather than the request, so the line names it and the command that brings
+# it back; whether the caller may run that command is the host's business, not this one's
+SILENT_REMEDY = (
+    "tg-agent.service took the connection and answered nothing — restart it: "
+    "systemctl restart tg-agent.service"
+)
+
 # Messages this client sent, so a watcher can tell the agent's own sends from what the
 # user sent from a phone: the server marks both as the account's
 SENT = SentLog("TG_SENT_LOG", "tg-agent")
@@ -60,6 +68,11 @@ def build_parser():
             "  tg.py mark-read --folder 5\n"
             "  tg.py dialogs\n"
             "  tg.py media --chat 777 --ids 12 13\n"
+            "\n"
+            "A call waits $TG_TIMEOUT seconds for its answer, 60 by default: a service\n"
+            "that takes the connection and writes nothing is reported as that, not as\n"
+            "a slow request. Exit codes: 0 allowed, 1 refused, 2 the socket could not\n"
+            "be reached, 3 the service did not answer in time\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -165,7 +178,13 @@ def request_from(options):
 def main(argv=None):
     options = build_parser().parse_args(argv)
     try:
+        # The deadline is agentsock's own, so every caller of this service gets it and
+        # this file holds no second account of how long a call may wait
         answer = ask(options.socket, request_from(options))
+    except TimeoutError as silent:
+        print(f"tg.py: {silent}", file=sys.stderr)
+        print(SILENT_REMEDY, file=sys.stderr)
+        return 3
     except (OSError, json.JSONDecodeError) as unreachable:
         print(f"tg.py: {options.socket}: {unreachable}", file=sys.stderr)
         return 2

@@ -8,11 +8,38 @@ on the import path.
 import json
 import os
 import socket
+import time
+
+# How long one call waits for its one answer. A service that takes the connection and then
+# writes nothing is what this catches: without it the caller waits out a timeout somebody
+# else owns, and a stuck service reads as a slow tool
+DEFAULT_DEADLINE = 60.0
 
 
-def ask(path, request):
-    """Send one request and read the one answer to it."""
+def deadline_from(environ=None):
+    """The deadline for one answer in seconds: $TG_TIMEOUT when it is one, else the default.
+
+    A value that is not a positive number is the default, because a caller shortening a
+    long read and a caller disabling the deadline name no seconds at all
+    """
+    environ = os.environ if environ is None else environ
+    try:
+        seconds = float((environ.get("TG_TIMEOUT") or "").strip())
+    except ValueError:
+        return DEFAULT_DEADLINE
+    return seconds if seconds > 0 else DEFAULT_DEADLINE
+
+
+def ask(path, request, deadline=None):
+    """Send one request and read the one answer to it.
+
+    Raises TimeoutError when the service takes the connection and answers nothing before
+    the deadline, which is a different fault from a socket nobody listens on
+    """
+    deadline = deadline_from() if deadline is None else deadline
+    end = time.monotonic() + deadline
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(deadline)
         connection.connect(path)
         try:
             connection.sendall(json.dumps(request).encode() + b"\n")
@@ -22,15 +49,32 @@ def ask(path, request):
             pass
         answer = b""
         while not answer.endswith(b"\n"):
-            block = connection.recv(65536)
+            left = end - time.monotonic()
+            if left <= 0:
+                raise TimeoutError(silence(path, deadline))
+            connection.settimeout(left)
+            try:
+                block = connection.recv(65536)
+            except TimeoutError:
+                raise TimeoutError(silence(path, deadline)) from None
             if not block:
                 break
             answer += block
     return json.loads(answer.decode())
 
 
+def silence(path, deadline):
+    """What a caller is told when the service holds the connection and writes nothing."""
+    return f"{path} took the connection and answered nothing in {deadline:g}s"
+
+
 def stream(path, request):
-    """Send one request and yield every answer line until the service closes the stream."""
+    """Send one request and yield every answer line until the service closes the stream.
+
+    No deadline here: a subscriber waits for the next message by design, and the opening
+    answer is the service's to send. A watcher that hears nothing at all is a stalled
+    subscriber, not a fault with an answer to report
+    """
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.connect(path)
         connection.sendall(json.dumps(request).encode() + b"\n")
