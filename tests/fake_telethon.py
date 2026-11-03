@@ -125,6 +125,13 @@ class FakeTopic:
     top_message: int = 0
 
 
+@dataclass
+class ForumTopicDeleted:
+    """Stands in for the constructor of that name, which carries an id and nothing else."""
+
+    id: int
+
+
 class FakeClient:
     """Records calls. Every method here mirrors one the service is allowed to use."""
 
@@ -223,11 +230,16 @@ class FakeClient:
                 held = [t for t in self.held_topics if wanted in t.title.casefold()]
             return _Topics(list(held))
         if name == "GetForumTopicsByIDRequest":
-            # A number reaches its topic whether or not the page of the list shows it
+            # A number reaches its topic whether or not the page of the list shows it, and
+            # a number no topic holds answers with the constructor that stands for one
+            # which is not there any more
             self._record("raw", request=name, topics=list(request.topics))
             by_id = {topic.id: topic for topic in self.held_topics}
             return _Topics(
-                [by_id[number] for number in request.topics if number in by_id]
+                [
+                    by_id.get(number) or ForumTopicDeleted(number)
+                    for number in request.topics
+                ]
             )
         if name == "ReadDiscussionRequest":
             self._record(

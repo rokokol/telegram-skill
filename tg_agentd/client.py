@@ -397,8 +397,14 @@ class Client:
             GetForumTopicsByIDRequest(peer=chat_id, topics=[number])
         )
         for topic in getattr(answer, "topics", None) or []:
-            if getattr(topic, "id", None) == number:
-                return topic
+            if getattr(topic, "id", None) != number:
+                continue
+            # A number no topic holds answers with the constructor for a topic that is no
+            # longer there, which carries an id and nothing else: it is not a thread, and
+            # a read that reached it would ask Telegram for one and be refused by name
+            if type(topic).__name__ == "ForumTopicDeleted":
+                return None
+            return topic
         return None
 
     async def update_folder(self, folder_id, folder):
