@@ -12,6 +12,10 @@
 #
 # A FIND or REPLACE holding a quote is a quoted heredoc, so the line stays exactly as the
 # source spells it
+#
+# A FIND must match its file exactly once. A refactor that moves the line leaves the entry
+# stale, which the falsify job reports as drift with nothing wrong in the service, and a
+# text that matches twice is stale too, so a line that appears twice needs the one below it
 
 # Presence. The server shows the account as online on any request of an active session,
 # so silence is not invisibility
