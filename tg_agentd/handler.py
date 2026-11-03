@@ -247,11 +247,11 @@ class Handler:
     async def _read_to(self, chat, request, key="id", topic=None):
         """The message a read stops at, which the chat has to hold.
 
-        Telegram takes the number as a limit on the receipt, so a number past the newest
-        message marks everything read rather than less, and one the chat never held would
-        clear the unread mark of messages nobody saw. The message is asked for before
-        anything is marked, under the grant that is about to use it, and a topic read
-        also refuses one that sits in another topic
+        A number the chat does not hold must never reach the receipt. Telegram reads the
+        number as a limit and clamps it to the newest message. A number past the end then
+        marks everything read, and the unread mark of messages nobody saw is gone. The
+        check runs under the grant the read is about to use, and a topic read refuses a
+        number that sits in another topic
         """
         stopped = _stop_number(request.get(key))
         if stopped is None:
@@ -792,8 +792,7 @@ def _stop_number(given):
     """The number a read stops at, or None when the request names none.
 
     A number that is not a positive integer names no message at all, so it is refused
-    here; whether the chat holds the one it does name is asked separately, and only where
-    nothing else answers that question first
+    here. Whether the chat holds the one it does name is a question of its own
     """
     if given is None:
         return None
