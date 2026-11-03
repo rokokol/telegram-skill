@@ -77,7 +77,7 @@ def silence_report(socket_path, action):
     except (TimeoutError, OSError, json.JSONDecodeError):
         return [
             "tg-agent.service took the connection and answered nothing: restart it "
-            "with systemctl restart tg-agent.service"
+            "with sudo systemctl restart tg-agent.service"
         ]
     if not answer.get("ok"):
         return [f"the service refused a ping: {answer.get('error')}"]
