@@ -473,8 +473,18 @@ defect 'topic/title-guess' 'tg_agentd/handler.py' \
 # General is the chat's own messages, and message 1's thread is whatever that number
 # happens to point at, or a library error in a bot's chat
 defect 'topic/general-thread' 'tg_agentd/handler.py' \
-  '        if identifier == GENERAL_TOPIC:' \
-  '        if False:' \
+  "$(
+    cat <<'MARK'
+        if identifier == GENERAL_TOPIC:
+            raise NoSuchTopic(
+MARK
+  )" \
+  "$(
+    cat <<'MARK'
+        if False:
+            raise NoSuchTopic(
+MARK
+  )" \
   "$(
     cat <<'EOF'
 reading General as a thread answers with another conversation, or with a library error in a chat with a bot, instead of refusing it as no thread at all
