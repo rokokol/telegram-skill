@@ -475,7 +475,11 @@ defect 'topic/title-guess' 'tg_agentd/handler.py' \
 defect 'topic/general-thread' 'tg_agentd/handler.py' \
   '        if identifier == GENERAL_TOPIC:' \
   '        if False:' \
-  'reading General as a thread answers with another conversation, or with a library error in a chat with a bot, instead of saying that its messages are the chat\'s own'
+  "$(
+    cat <<'EOF'
+reading General as a thread answers with another conversation, or with a library error in a chat with a bot, instead of refusing it as no thread at all
+EOF
+  )" \
 
 # The list answers with a page, so a title it does not hold is still a topic the forum
 # knows; asking the forum by name is what reaches it
