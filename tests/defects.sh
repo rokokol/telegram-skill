@@ -639,14 +639,14 @@ FOLDER
 defect 'mark-read/chat-limit' 'tg_agentd/handler.py' \
   "$(
     cat <<'LIMIT'
-            stopped = _read_to(request)
+            stopped = await self._read_to(chat, request)
             await self._client.mark_read(chat, stopped)
             if stopped is None:
 LIMIT
   )" \
   "$(
     cat <<'LIMIT'
-            stopped = _read_to(request)
+            stopped = await self._read_to(chat, request)
             await self._client.mark_read(chat)
             if stopped is None:
 LIMIT
