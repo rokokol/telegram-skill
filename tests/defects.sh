@@ -470,6 +470,27 @@ defect 'topic/title-guess' 'tg_agentd/handler.py' \
   '        if False:' \
   'a title two topics share marks the first of them read, and the far side sees a conversation read that nobody opened'
 
+# General is the chat's own messages, and message 1's thread is whatever that number
+# happens to point at, or a library error in a bot's chat
+defect 'topic/general-thread' 'tg_agentd/handler.py' \
+  '        if identifier == GENERAL_TOPIC:' \
+  '        if False:' \
+  'reading General as a thread answers with another conversation, or with a library error in a chat with a bot, instead of saying that its messages are the chat\'s own'
+
+# The list answers with a page, so a title it does not hold is still a topic the forum
+# knows; asking the forum by name is what reaches it
+defect 'topic/title-page' 'tg_agentd/handler.py' \
+  '            for topic in await self._forum_topics(chat, query=text)' \
+  '            for topic in await self._forum_topics(chat)' \
+  'a topic past the first page of the list cannot be read by its title, though the forum itself would have found it'
+
+# Silence has three causes and only the service can tell them apart; a caller told the
+# wrong one either restarts a working service or waits on a dead one
+defect 'silence/link-blind' 'tg.py' \
+  '    if not (answer.get("result") or {}).get("telegram"):' \
+  '    if False:' \
+  'a service that lost Telegram while it runs is reported as still working on the action, so the caller waits for an answer that will never come'
+
 # A username reaches a chat its title would not find, and it is the name people type
 defect 'find/username' 'tg_agentd/handler.py' \
   '            if held not in name.casefold() and held not in username.casefold():' \
@@ -547,8 +568,8 @@ defect 'info/hidden' 'tg_agentd/profile.py' \
 # Recovery. The link to Telegram can go away for hours, and Telethon's own reconnect is
 # what turned a throttle into a storm
 defect 'recovery/unpaused' 'tg_agentd/client.py' \
-  '                pause = min(RETRY_PAUSE * 2 ** (failures - 1), RETRY_CAP)' \
-  '                pause = 0' \
+  '            pause = min(RETRY_PAUSE * 2 ** (failures - 1), RETRY_CAP)' \
+  '            pause = 0' \
   'the service retries Telegram with no pause after every failure, which is the burst that made the link answer a throttling page'
 
 defect 'recovery/attempt' 'tg_agentd/client.py' \
