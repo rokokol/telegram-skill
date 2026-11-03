@@ -103,6 +103,115 @@ def test_a_silent_service_is_reported_with_the_line_that_restarts_it(
     assert "Traceback" not in printed
 
 
+def scripted_service(path, answers):
+    """A socket that answers its connections in order: a line each, or None for silence."""
+    listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    listener.bind(path)
+    listener.listen(4)
+    accepted = []
+
+    def serve():
+        for answer in answers:
+            try:
+                connection, _ = listener.accept()
+            except OSError:
+                return
+            accepted.append(connection)
+            if answer is not None:
+                connection.sendall(answer)
+
+    thread = threading.Thread(target=serve, daemon=True)
+    thread.start()
+    return listener, accepted
+
+
+PING_TELEGRAM_UP = (
+    b'{"ok": true, "action": "ping", "result": {"telegram": true}}\n'
+)
+PING_TELEGRAM_DOWN = (
+    b'{"ok": true, "action": "ping", "result": {"telegram": false}}\n'
+)
+
+
+# A heavy action is given longer than a light one, so a digest of a whole folder is not
+# cut at the deadline that suits a single chat
+def test_an_action_that_reads_a_whole_folder_is_given_longer(monkeypatch):
+    monkeypatch.delenv("TG_TIMEOUT", raising=False)
+    assert tg.patience("digest") > tg.patience("read")
+    assert tg.patience("read") == tg.DEFAULT_PATIENCE
+    monkeypatch.setenv("TG_TIMEOUT", "7")
+    assert tg.patience("digest") == 7, "the caller's own ceiling was overruled"
+
+
+def test_the_patience_reaches_the_call(monkeypatch):
+    seen = []
+
+    def ask(socket, request, deadline=None):
+        seen.append((request["action"], deadline))
+        return {"ok": True, "result": []}
+
+    monkeypatch.delenv("TG_TIMEOUT", raising=False)
+    monkeypatch.setattr(tg, "ask", ask)
+    assert tg.main(["digest", "--folder", "5"]) == 0
+    assert tg.main(["whoami"]) == 0
+    assert seen == [("digest", tg.PATIENCE["digest"]), ("whoami", tg.DEFAULT_PATIENCE)]
+
+
+# A long action is not a stuck service, and the client asks before it accuses one
+def test_a_long_action_is_not_reported_as_a_stuck_service(tmp_path, monkeypatch, capsys):
+    path = str(tmp_path / "socket")
+    listener, accepted = scripted_service(path, [None, PING_TELEGRAM_UP])
+    monkeypatch.setenv("TG_TIMEOUT", "0.2")
+    try:
+        status = within(10, lambda: tg.main(["digest", "--folder", "5", "--socket", path]))
+    finally:
+        for connection in accepted:
+            connection.close()
+        listener.close()
+    printed = capsys.readouterr().err
+    assert status == 3
+    assert "still working" in printed
+    assert "TG_TIMEOUT" in printed
+    assert "systemctl restart" not in printed
+
+
+def test_a_link_that_is_down_is_not_reported_as_a_stuck_service(
+    tmp_path, monkeypatch, capsys
+):
+    path = str(tmp_path / "socket")
+    listener, accepted = scripted_service(path, [None, PING_TELEGRAM_DOWN])
+    monkeypatch.setenv("TG_TIMEOUT", "0.2")
+    try:
+        status = within(10, lambda: tg.main(["read", "--chat", "777", "--socket", path]))
+    finally:
+        for connection in accepted:
+            connection.close()
+        listener.close()
+    printed = capsys.readouterr().err
+    assert status == 3
+    assert "link to Telegram is down" in printed
+    assert "systemctl restart" not in printed
+
+
+def test_a_write_is_not_repeated_blindly(tmp_path, monkeypatch, capsys):
+    path = str(tmp_path / "socket")
+    listener, accepted = scripted_service(path, [None, PING_TELEGRAM_UP])
+    monkeypatch.setenv("TG_TIMEOUT", "0.2")
+    try:
+        within(
+            10,
+            lambda: tg.main(
+                ["send", "--chat", "777", "--text", "hi", "--socket", path]
+            ),
+        )
+    finally:
+        for connection in accepted:
+            connection.close()
+        listener.close()
+    printed = capsys.readouterr().err
+    assert "may have landed" in printed
+
+
 def test_an_unreachable_socket_is_still_a_different_answer(tmp_path, capsys):
     status = tg.main(["whoami", "--socket", str(tmp_path / "nothing")])
     assert status == 2

@@ -134,7 +134,7 @@ class Client:
             if self.connected() and since_probe < PROBE_INTERVAL:
                 continue
             since_probe = 0.0
-            if await self._answering():
+            if await self.answering():
                 failures = 0
                 continue
             # A link that answers nothing is rebuilt from nothing, which is the part a
@@ -150,7 +150,7 @@ class Client:
             pause = min(RETRY_PAUSE * 2 ** (failures - 1), RETRY_CAP)
             await asyncio.sleep(pause)
 
-    async def _answering(self):
+    async def answering(self):
         """Whether a real request still reaches Telegram through this session.
 
         The status is the cheapest request the session makes and the one this service

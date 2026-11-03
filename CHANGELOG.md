@@ -8,8 +8,13 @@ Kept in the shape of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), d
 
 - A read message carries `topic`, the forum thread it is in and nothing for the chat's own messages, so a flat read of a forum or of a chat with a bot is groupable by conversation. Before, `read --topic` answered one thread and a read without one gave every thread interleaved with no way to tell them apart
 
+### Added
+
+- `ping` answers whether the service reaches Telegram, in one request and under no grant, which is the question a call that ended at its deadline has to answer
+
 ### Fixed
 
+- A long action was read as a hung service: one deadline of 60 seconds covered `digest` of a whole folder as well as one chat, and a call that ended at it was told the service was stuck. Each action now has the patience its work needs, 900 seconds for `digest`, 300 for `media`, 120 for `dialogs` and `find`, with `$TG_TIMEOUT` over everyone's, and a call that still ends at its deadline asks `tg.py ping` whether the service reaches Telegram. A running action is then reported as still working, a down link as one the service rebuilds itself, and only a service that answers nothing is named for a restart
 - A session Telethon still called connected could be dead. On 2026-10-30 a dead exit proxy reset the transport, the reconnect nulled the connection under Telethon's send and receive loops, and `is_connected` went on answering yes because it reads a flag rather than the transport, so the service answered nothing and never retried. It now proves the link with a real status request every minute, rebuilds it from a disconnect when that request fails, because Telethon refuses a plain connect to a sender that still calls itself connected, and leaves the restart to systemd only after eight rebuilds in a row change nothing
 - `tg.py` had no deadline of its own, so a service that took the socket and wrote nothing left every call hanging until a timeout somebody else owned, and the fault read as a slow tool. A call now ends at `$TG_TIMEOUT` seconds, 60 by default, names the socket and adds `tg-agent.service took the connection and answered nothing — restart it: systemctl restart tg-agent.service`, and exits 3, which a script can tell apart from a refusal and from a socket nobody listens on
 - `read --topic N` handed any number straight to Telegram, which answers with the thread of whatever message carries it: a number that named no topic returned another conversation instead of refusing it, and a subscription naming one filtered every message out in silence. A number is now held to the list the forum answers with, as a title already was

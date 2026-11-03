@@ -39,7 +39,7 @@ def serve(monkeypatch, messages, sent=None):
     """Answer every read with these messages, and every send with message 50."""
     asked = []
 
-    def ask(socket, request):
+    def ask(socket, request, deadline=None):
         asked.append(request)
         if request["action"] in ("send", "reply"):
             return {"ok": True, "result": {"id": sent or 50, "out": True}}
@@ -89,7 +89,9 @@ def test_a_send_is_remembered_per_chat(monkeypatch, tmp_path, capsys):
 def test_a_refused_send_is_not_remembered(monkeypatch, tmp_path, capsys):
     log = tmp_path / "sent"
     monkeypatch.setenv("TG_SENT_LOG", str(log))
-    monkeypatch.setattr(tg, "ask", lambda socket, request: {"ok": False, "error": "no"})
+    monkeypatch.setattr(
+        tg, "ask", lambda socket, request, deadline=None: {"ok": False, "error": "no"}
+    )
     tg.main(["send", "--chat", "777", "--text", "x"])
     assert not log.exists() or log.read_text() == ""
 

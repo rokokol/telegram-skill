@@ -16,18 +16,23 @@ import time
 DEFAULT_DEADLINE = 60.0
 
 
-def deadline_from(environ=None):
-    """The deadline for one answer in seconds: $TG_TIMEOUT when it is one, else the default.
+def timeout_from(environ=None):
+    """The deadline a caller named in $TG_TIMEOUT, or None when it named none.
 
-    A value that is not a positive number is the default, because a caller shortening a
-    long read and a caller disabling the deadline name no seconds at all
+    A value that is not a positive number names none, because a caller shortening a long
+    read and a caller writing the variable by mistake look the same here
     """
     environ = os.environ if environ is None else environ
     try:
         seconds = float((environ.get("TG_TIMEOUT") or "").strip())
     except ValueError:
-        return DEFAULT_DEADLINE
-    return seconds if seconds > 0 else DEFAULT_DEADLINE
+        return None
+    return seconds if seconds > 0 else None
+
+
+def deadline_from(environ=None):
+    """The deadline for one answer in seconds: $TG_TIMEOUT when it is one, else the default."""
+    return timeout_from(environ) or DEFAULT_DEADLINE
 
 
 def ask(path, request, deadline=None):

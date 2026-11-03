@@ -41,6 +41,34 @@ def grant(store, chat, words):
     (store.root / "chats" / f"{chat}.conf").write_text(f"allow: {words}\n")
 
 
+# A caller whose call ended at its deadline has to tell a service that is working from one
+# that is stuck, and only the service can answer that. The question reads no chat and
+# names nobody, so it asks for no grant
+def test_a_ping_says_whether_telegram_answers(ask, fake):
+    fake.connected = True
+    answer = ask({"action": "ping"})
+    assert answer["ok"] is True, answer
+    assert answer["result"] == {"telegram": True}
+
+
+def test_a_ping_says_when_telegram_does_not_answer(store, monkeypatch):
+    class Deaf(FakeClient):
+        """A session whose flag says connected while nothing reaches Telegram."""
+
+        def is_connected(self):
+            return True
+
+        async def __call__(self, request):
+            self._record("raw", request=type(request).__name__)
+            raise ConnectionError("the link is gone")
+
+    monkeypatch.setattr(client_module, "UpdateStatusRequest", _FakeStatusRequest)
+    served = handler.Handler(store, client_module.Client(Deaf()))
+    answer = asyncio.run(served.handle({"action": "ping"}))
+    assert answer["ok"] is True, answer
+    assert answer["result"] == {"telegram": False}
+
+
 def test_an_allowed_action_names_the_word_that_allowed_it(ask, store):
     grant(store, 777, "read")
     answer = ask({"action": "read", "chat": 777})

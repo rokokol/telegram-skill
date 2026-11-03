@@ -116,6 +116,13 @@ class Handler:
                 None, action, profile.describe(await self._client.me(), private=False)
             )
 
+        # A caller whose call ended at its deadline has to know which silence it met: a
+        # service working on a long action, one whose link to Telegram is down, or one
+        # that stopped answering at all. Only this side can tell them apart, and the
+        # question reads no chat and names nobody
+        if action == "ping":
+            return _allowed(None, action, {"telegram": await self._client.answering()})
+
         # Listing every chat reaches the whole account, so only the default file grants it
         if action == "dialogs":
             decision = self._store.account_may("dialogs")

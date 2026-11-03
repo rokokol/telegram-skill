@@ -14,20 +14,72 @@ import os
 import sys
 
 from agentsock import SentLog, ask, stream  # noqa: F401  — stream is for tg-watch.py
+from agentsock import DEFAULT_DEADLINE, timeout_from
 
 DEFAULT_SOCKET = os.environ.get("TG_SOCKET", "/run/tg-agent/socket")
 
-# What a caller is told when the service holds the connection and writes nothing. The fault
-# is the service rather than the request, so the line names it and the command that brings
-# it back; whether the caller may run that command is the host's business, not this one's
-SILENT_REMEDY = (
-    "tg-agent.service took the connection and answered nothing — restart it: "
-    "systemctl restart tg-agent.service"
-)
+# How long one action's answer may take, in seconds. One chat answers at once, a digest
+# reads every member of a folder before it answers, and a download waits for a file, so a
+# single deadline would cut the heavy actions while it left the light ones waiting. The
+# table is this client's patience, not a claim about the service's speed, and $TG_TIMEOUT
+# overrides every value in it
+PATIENCE = {"digest": 900, "media": 300, "dialogs": 120, "find": 120}
+DEFAULT_PATIENCE = DEFAULT_DEADLINE
+
+# The actions that write something, where a call that ended at its deadline may already
+# have landed on the other side
+WRITES = {"send", "reply", "forward", "edit", "react", "mark-read", "delete", "delete-for-all"}
+
+# How long the question behind a silence may take. It is one request the service either
+# makes or fails at once, so it needs no patience of the action's own
+PING_DEADLINE = 10
 
 # Messages this client sent, so a watcher can tell the agent's own sends from what the
 # user sent from a phone: the server marks both as the account's
 SENT = SentLog("TG_SENT_LOG", "tg-agent")
+
+
+def patience(action):
+    """How many seconds one action's answer may take before the client stops waiting."""
+    return timeout_from() or PATIENCE.get(action, DEFAULT_DEADLINE)
+
+
+def silence_report(socket_path, action):
+    """What to tell a caller whose call ended at its deadline.
+
+    Silence reads the same from here whether the service is grinding through a long
+    action, has lost its link to Telegram while it runs, or has stopped answering at all.
+    A ping is one cheap question that separates the three, and each answer has its own
+    way out: repeating with more patience, waiting for the link, or a restart
+    """
+    try:
+        answer = ask(
+            socket_path,
+            {"action": "ping"},
+            deadline=min(PING_DEADLINE, patience(action)),
+        )
+    except (TimeoutError, OSError, json.JSONDecodeError):
+        return [
+            "tg-agent.service took the connection and answered nothing: restart it "
+            "with systemctl restart tg-agent.service"
+        ]
+    if not answer.get("ok"):
+        return [f"the service refused a ping: {answer.get('error')}"]
+    if not (answer.get("result") or {}).get("telegram"):
+        return [
+            "the service is running, and its link to Telegram is down: it rebuilds "
+            "that link itself, so repeat the call in a few minutes instead of "
+            "restarting it"
+        ]
+    said = [
+        f"the service is running and reached Telegram, so {action} is still working: "
+        "set TG_TIMEOUT to more seconds and repeat the call"
+    ]
+    if action in WRITES:
+        said.append(
+            "check the chat before repeating a write: the first call may have landed"
+        )
+    return said
 
 
 def remember_sent(chat, message_id):
@@ -69,10 +121,11 @@ def build_parser():
             "  tg.py dialogs\n"
             "  tg.py media --chat 777 --ids 12 13\n"
             "\n"
-            "A call waits $TG_TIMEOUT seconds for its answer, 60 by default: a service\n"
-            "that takes the connection and writes nothing is reported as that, not as\n"
-            "a slow request. Exit codes: 0 allowed, 1 refused, 2 the socket could not\n"
-            "be reached, 3 the service did not answer in time\n"
+            "A call waits $TG_TIMEOUT seconds for its answer: 60 by default, more for\n"
+            "digest, media, dialogs and find, which read a whole folder or a file. A\n"
+            "call still waiting at its deadline asks the service why, so a long action\n"
+            "is not reported as a hung one. Exit codes: 0 allowed, 1 refused, 2 the\n"
+            "socket could not be reached, 3 no answer in time\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -178,12 +231,16 @@ def request_from(options):
 def main(argv=None):
     options = build_parser().parse_args(argv)
     try:
-        # The deadline is agentsock's own, so every caller of this service gets it and
-        # this file holds no second account of how long a call may wait
-        answer = ask(options.socket, request_from(options))
+        # The patience is this file's, so an action that reads a whole folder may take
+        # longer than one that reads a single chat; the deadline inside agentsock stays
+        # the default for every other caller
+        answer = ask(
+            options.socket, request_from(options), deadline=patience(options.action)
+        )
     except TimeoutError as silent:
         print(f"tg.py: {silent}", file=sys.stderr)
-        print(SILENT_REMEDY, file=sys.stderr)
+        for line in silence_report(options.socket, options.action):
+            print(line, file=sys.stderr)
         return 3
     except (OSError, json.JSONDecodeError) as unreachable:
         print(f"tg.py: {options.socket}: {unreachable}", file=sys.stderr)
