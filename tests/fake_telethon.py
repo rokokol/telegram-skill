@@ -135,6 +135,7 @@ class FakeClient:
         archived_dialogs=None,
         folders=None,
         topics=None,
+        held_topics=None,
         premium=False,
         full_rich=None,
         entities=None,
@@ -153,6 +154,9 @@ class FakeClient:
         self.archived_dialogs = archived_dialogs or []
         self.folders = folders or []
         self.topics = topics or []
+        # The topics a number can reach, which is every one the forum holds: the page of
+        # the list is shorter than the forum it belongs to
+        self.held_topics = self.topics if held_topics is None else held_topics
         self.connected = False
 
     def _record(self, name, **kwargs):
@@ -210,7 +214,21 @@ class FakeClient:
                 reactions=[reaction.emoticon for reaction in request.reaction],
             )
         if name == "GetForumTopicsRequest":
-            return _Topics(list(self.topics))
+            # The forum answers a page, and a query narrows it to the titles holding it
+            self._record("raw", request=name, q=request.q)
+            held = self.topics
+            if request.q:
+                # A search reaches the whole forum, not the page the list answered with
+                wanted = request.q.casefold()
+                held = [t for t in self.held_topics if wanted in t.title.casefold()]
+            return _Topics(list(held))
+        if name == "GetForumTopicsByIDRequest":
+            # A number reaches its topic whether or not the page of the list shows it
+            self._record("raw", request=name, topics=list(request.topics))
+            by_id = {topic.id: topic for topic in self.held_topics}
+            return _Topics(
+                [by_id[number] for number in request.topics if number in by_id]
+            )
         if name == "ReadDiscussionRequest":
             self._record(
                 "raw_topic_read",

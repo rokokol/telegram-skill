@@ -74,7 +74,7 @@ def test_a_round_prints_each_message_and_moves_the_mark(monkeypatch, capsys):
     monkeypatch.setattr(
         watch.tg,
         "ask",
-        lambda socket, request: {
+        lambda socket, request, deadline=None: {
             "ok": True,
             "result": [
                 {"id": 12, "from": 42, "text": "second", "out": False},
@@ -90,7 +90,7 @@ def test_a_round_prints_each_message_and_moves_the_mark(monkeypatch, capsys):
 
 
 def test_a_round_with_nothing_new_keeps_the_mark(monkeypatch):
-    monkeypatch.setattr(watch.tg, "ask", lambda socket, request: {"ok": True, "result": []})
+    monkeypatch.setattr(watch.tg, "ask", lambda socket, request, deadline=None: {"ok": True, "result": []})
     assert watch.round_once(Options(), since=10) == 10
 
 
@@ -101,7 +101,7 @@ def test_a_refusal_is_reported_without_ending_the_watch(monkeypatch, capsys):
     monkeypatch.setattr(
         watch.tg,
         "ask",
-        lambda socket, request: {"ok": False, "error": "chat 777 does not allow read"},
+        lambda socket, request, deadline=None: {"ok": False, "error": "chat 777 does not allow read"},
     )
     mark = watch.round_once(Options(), since=10)
     assert "refused" in capsys.readouterr().out

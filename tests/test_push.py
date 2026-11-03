@@ -49,6 +49,7 @@ def world(tmp_path, monkeypatch):
         # The forum these subscriptions name topics of, because a topic is known only
         # through the list the forum itself answers with
         topics=[
+            FakeTopic(id=1, title="General", unread_count=0, top_message=0),
             FakeTopic(id=17, title="Work", unread_count=1, top_message=3),
             FakeTopic(id=18, title="Home", unread_count=0, top_message=4),
         ],

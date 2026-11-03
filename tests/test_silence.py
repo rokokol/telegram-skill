@@ -56,30 +56,46 @@ def within(seconds, call):
     return box["value"]
 
 
-def test_an_answer_that_never_comes_ends_at_the_deadline(tmp_path, monkeypatch):
+def test_an_answer_that_never_comes_ends_at_the_deadline(tmp_path):
     path = str(tmp_path / "socket")
     listener, accepted = silent_service(path)
-    monkeypatch.setenv("TG_TIMEOUT", "0.2")
     try:
         with pytest.raises(TimeoutError):
-            within(5, lambda: agentsock.ask(path, {"action": "whoami"}))
+            within(5, lambda: agentsock.ask(path, {"action": "whoami"}, deadline=0.2))
     finally:
         for connection in accepted:
             connection.close()
         listener.close()
 
 
-# The deadline is read from the environment so a caller can shorten it for one long read
-# without a flag, and a value that is not a positive number falls back to the default
-def test_the_deadline_comes_from_the_environment(monkeypatch):
+# agentsock is vendored into another skill, so a deadline is the caller's decision and a
+# caller that names none waits as long as it takes: mail's client calls ask as it always
+# did, and a default here would have cut its answers without its code asking for that
+def test_a_caller_that_names_no_deadline_keeps_waiting(tmp_path):
+    path = str(tmp_path / "socket")
+    listener, accepted = silent_service(path)
+    try:
+        with pytest.raises(AssertionError):
+            within(0.3, lambda: agentsock.ask(path, {"action": "whoami"}))
+    finally:
+        for connection in accepted:
+            connection.close()
+        listener.close()
+
+
+# The ceiling is read from the environment so a caller can shorten it for one run without
+# a flag, and a value that is not a positive number names no ceiling at all
+def test_the_ceiling_comes_from_the_environment(monkeypatch):
     monkeypatch.setenv("TG_TIMEOUT", "2.5")
-    assert agentsock.deadline_from() == 2.5
+    assert tg.timeout_from() == 2.5
+    assert tg.patience("digest") == 2.5, "the action's own patience outranked the caller"
     monkeypatch.setenv("TG_TIMEOUT", "-1")
-    assert agentsock.deadline_from() == agentsock.DEFAULT_DEADLINE
+    assert tg.timeout_from() is None
     monkeypatch.setenv("TG_TIMEOUT", "soon")
-    assert agentsock.deadline_from() == agentsock.DEFAULT_DEADLINE
+    assert tg.timeout_from() is None
     monkeypatch.delenv("TG_TIMEOUT")
-    assert agentsock.deadline_from() == agentsock.DEFAULT_DEADLINE
+    assert tg.timeout_from() is None
+    assert tg.patience("read") == tg.DEFAULT_PATIENCE
 
 
 # A caller that hears nothing has to learn what to do about it: the service, not the

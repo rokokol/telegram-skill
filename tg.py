@@ -14,7 +14,6 @@ import os
 import sys
 
 from agentsock import SentLog, ask, stream  # noqa: F401  — stream is for tg-watch.py
-from agentsock import DEFAULT_DEADLINE, timeout_from
 
 DEFAULT_SOCKET = os.environ.get("TG_SOCKET", "/run/tg-agent/socket")
 
@@ -24,7 +23,10 @@ DEFAULT_SOCKET = os.environ.get("TG_SOCKET", "/run/tg-agent/socket")
 # table is this client's patience, not a claim about the service's speed, and $TG_TIMEOUT
 # overrides every value in it
 PATIENCE = {"digest": 900, "media": 300, "dialogs": 120, "find": 120}
-DEFAULT_PATIENCE = DEFAULT_DEADLINE
+
+# The deadline every action falls back to, and the variable that overrides all of them
+DEFAULT_PATIENCE = 60
+TIMEOUT_VARIABLE = "TG_TIMEOUT"
 
 # The actions that write something, where a call that ended at its deadline may already
 # have landed on the other side
@@ -39,9 +41,23 @@ PING_DEADLINE = 10
 SENT = SentLog("TG_SENT_LOG", "tg-agent")
 
 
+def timeout_from(environ=None):
+    """The ceiling the caller named in $TG_TIMEOUT, or None when it named none.
+
+    A value that is not a positive number names none: a caller shortening a long read and
+    a caller who wrote the variable by mistake look the same here
+    """
+    environ = os.environ if environ is None else environ
+    try:
+        seconds = float((environ.get(TIMEOUT_VARIABLE) or "").strip())
+    except ValueError:
+        return None
+    return seconds if seconds > 0 else None
+
+
 def patience(action):
     """How many seconds one action's answer may take before the client stops waiting."""
-    return timeout_from() or PATIENCE.get(action, DEFAULT_DEADLINE)
+    return timeout_from() or PATIENCE.get(action, DEFAULT_PATIENCE)
 
 
 def silence_report(socket_path, action):

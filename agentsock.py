@@ -10,41 +10,23 @@ import os
 import socket
 import time
 
-# How long one call waits for its one answer. A service that takes the connection and then
-# writes nothing is what this catches: without it the caller waits out a timeout somebody
-# else owns, and a stuck service reads as a slow tool
-DEFAULT_DEADLINE = 60.0
-
-
-def timeout_from(environ=None):
-    """The deadline a caller named in $TG_TIMEOUT, or None when it named none.
-
-    A value that is not a positive number names none, because a caller shortening a long
-    read and a caller writing the variable by mistake look the same here
-    """
-    environ = os.environ if environ is None else environ
-    try:
-        seconds = float((environ.get("TG_TIMEOUT") or "").strip())
-    except ValueError:
-        return None
-    return seconds if seconds > 0 else None
-
-
-def deadline_from(environ=None):
-    """The deadline for one answer in seconds: $TG_TIMEOUT when it is one, else the default."""
-    return timeout_from(environ) or DEFAULT_DEADLINE
+# This file is vendored into other skills, so it carries the mechanism and no policy: how
+# long a call may wait is the caller's decision, and a skill that wants a deadline names
+# one. A caller that names none waits as long as it takes, which is what every caller did
+# before the deadline existed
 
 
 def ask(path, request, deadline=None):
     """Send one request and read the one answer to it.
 
-    Raises TimeoutError when the service takes the connection and answers nothing before
-    the deadline, which is a different fault from a socket nobody listens on
+    `deadline` is how many seconds the answer may take, and None waits indefinitely. A
+    call that outlives it raises TimeoutError naming the socket and the seconds, which is
+    a different fault from a socket nobody listens on: the service is there and silent
     """
-    deadline = deadline_from() if deadline is None else deadline
-    end = time.monotonic() + deadline
+    end = None if deadline is None else time.monotonic() + deadline
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
-        connection.settimeout(deadline)
+        if deadline is not None:
+            connection.settimeout(deadline)
         connection.connect(path)
         try:
             connection.sendall(json.dumps(request).encode() + b"\n")
@@ -54,13 +36,16 @@ def ask(path, request, deadline=None):
             pass
         answer = b""
         while not answer.endswith(b"\n"):
-            left = end - time.monotonic()
-            if left <= 0:
-                raise TimeoutError(silence(path, deadline))
-            connection.settimeout(left)
+            if end is not None:
+                left = end - time.monotonic()
+                if left <= 0:
+                    raise TimeoutError(silence(path, deadline))
+                connection.settimeout(left)
             try:
                 block = connection.recv(65536)
             except TimeoutError:
+                if deadline is None:
+                    raise
                 raise TimeoutError(silence(path, deadline)) from None
             if not block:
                 break

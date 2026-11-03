@@ -649,43 +649,42 @@ class Handler:
             held.extend(folders.members_of(folder))
         return sorted(set(held))
 
-    async def _forum_topics(self, chat):
-        """The topics of a forum, saying plainly when the chat keeps none."""
+    async def _forum_topics(self, chat, query=None):
+        """The topics of a forum, or those whose title the query holds."""
         try:
-            return await self._client.topics(chat)
+            return await self._client.topics(chat, query=query)
         except Exception as refused:
-            # A chat that keeps no topics is an ordinary answer rather than a fault, and
-            # the library's own error names a constructor nobody outside it has heard of
-            said = f"{type(refused).__name__}: {refused}"
-            if any(marker in said for marker in NO_TOPICS):
-                raise ChatIsNotAForum(
-                    f"chat {chat} keeps no topics this account can list"
-                ) from None
-            raise
+            _keeps_no_topics(chat, refused)
 
     async def _topic(self, chat, wanted):
         """The forum topic a request names, by number or by the title the app shows.
 
-        The forum's own list is the only thing that says which numbers are topics. A
-        number passed straight to Telegram asks for the thread of whatever message
-        carries it, and answers with another conversation rather than a refusal. General
-        is the one topic no list has to name, and no message starts it.
+        The forum is the authority on both, and neither goes through the page of the list
+        alone: a number is answered by the topic it names, so a forum of thousands is read
+        as surely as a short one, and a title is asked for by name. A number no topic
+        holds and a title two topics share are refusals, because a guess reads another
+        conversation
         """
         text = str(wanted).strip()
-        if text.casefold() == GENERAL_TITLE.casefold() or text == str(GENERAL_TOPIC):
-            # The list is still asked for, because a chat that keeps no topics keeps no
-            # General either, and a chat named wrongly has to hear that
-            await self._forum_topics(chat)
-            return _General()
         if text.isdigit():
-            identifier = int(text)
-            for topic in await self._forum_topics(chat):
-                if getattr(topic, "id", None) == identifier:
-                    return topic
-            raise NoSuchTopic(f"the forum holds no topic {identifier}")
+            return await self._by_number(chat, int(text))
+        return await self._by_title(chat, text)
+
+    async def _by_number(self, chat, number):
+        """The topic a number names, whether or not the page of the list shows it."""
+        try:
+            topic = await self._client.topic(chat, number)
+        except Exception as refused:
+            _keeps_no_topics(chat, refused)
+        if topic is None:
+            raise NoSuchTopic(f"the forum holds no topic {number}")
+        return topic
+
+    async def _by_title(self, chat, text):
+        """The one topic titled `text`, from the forum's own search of its titles."""
         found = [
             topic
-            for topic in await self._forum_topics(chat)
+            for topic in await self._forum_topics(chat, query=text)
             if folders.title_of(topic).casefold() == text.casefold()
         ]
         if not found:
@@ -968,19 +967,21 @@ def _allowed(by, action, result):
     }
 
 
-# The topic a forum keeps for whatever names no other one, and the title the app shows
-# for it. It is the chat's own read position and its own messages, not a thread of its own
+# The topic a forum keeps for whatever names no other one. It is the chat's own read
+# position and its own messages, not a thread of its own
 GENERAL_TOPIC = 1
-GENERAL_TITLE = "General"
 
 
-class _General:
-    """General as a topic a list may leave out, so every caller reads it the same way."""
+def _keeps_no_topics(chat, refused):
+    """Raise the plain sentence for a chat that keeps no topics this account can list.
 
-    id = GENERAL_TOPIC
-    title = GENERAL_TITLE
-    unread_count = 0
-    top_message = 0
+    Telegram answers a chat that is no forum, one it cannot reach and an identifier that
+    names nobody with a constructor name each, and none of them is worth passing on
+    """
+    said = f"{type(refused).__name__}: {refused}"
+    if any(marker in said for marker in NO_TOPICS):
+        raise ChatIsNotAForum(f"chat {chat} keeps no topics this account can list")
+    raise refused
 
 
 def _thread_of(message):

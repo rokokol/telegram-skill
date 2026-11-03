@@ -14,6 +14,7 @@ from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import (
     EditMessageRequest,
     GetDialogFiltersRequest,
+    GetForumTopicsByIDRequest,
     GetForumTopicsRequest,
     GetFullChatRequest,
     GetPollVotesRequest,
@@ -365,12 +366,13 @@ class Client:
         answer = await self._telethon(GetDialogFiltersRequest())
         return list(getattr(answer, "filters", answer) or [])
 
-    async def topics(self, chat_id, limit=100):
-        """The topics of a forum.
+    async def topics(self, chat_id, limit=100, query=None):
+        """A page of a forum's topics, or the ones whose title the query holds.
 
         A forum keeps every message inside a topic, so reading one without naming a topic
         returns all of them interleaved. These live under `messages` rather than
-        `channels`, which is where the name suggests they would be.
+        `channels`, which is where the name suggests they would be. The answer is a page,
+        so a forum with more topics than it holds has more than this returns.
         """
         answer = await self._telethon(
             GetForumTopicsRequest(
@@ -379,9 +381,25 @@ class Client:
                 offset_id=0,
                 offset_topic=0,
                 limit=limit,
+                q=query,
             )
         )
         return list(getattr(answer, "topics", answer) or [])
+
+    async def topic(self, chat_id, number):
+        """One forum topic by its number, which a page of the list may not hold.
+
+        The list answers with a page, so a number past its end reaches nothing through it.
+        This names the topic itself, and the answer carries the title and the newest
+        message a read stops at, as the list does
+        """
+        answer = await self._telethon(
+            GetForumTopicsByIDRequest(peer=chat_id, topics=[number])
+        )
+        for topic in getattr(answer, "topics", None) or []:
+            if getattr(topic, "id", None) == number:
+                return topic
+        return None
 
     async def update_folder(self, folder_id, folder):
         """Replace a folder, or delete it when given nothing to put there."""

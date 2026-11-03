@@ -110,7 +110,11 @@ def request_for(options, since):
 
 def latest_id(options):
     """Where to start when the caller named no starting point."""
-    answer = tg.ask(options.socket, request_for(options, None) | {"limit": 1})
+    answer = tg.ask(
+        options.socket,
+        request_for(options, None) | {"limit": 1},
+        deadline=tg.patience("read"),
+    )
     if not answer.get("ok"):
         raise SystemExit(f"tg-watch.py: {answer.get('error')}")
     return newest(answer.get("result") or [])
@@ -122,7 +126,9 @@ def round_once(options, since):
     A refusal is printed and the starting point kept: a permission withdrawn while this
     runs should stop the output, not the watch, because the user may put it back.
     """
-    answer = tg.ask(options.socket, request_for(options, since))
+    answer = tg.ask(
+        options.socket, request_for(options, since), deadline=tg.patience("read")
+    )
     if not answer.get("ok"):
         print(f"refused: {answer.get('error')}", flush=True)
         return since

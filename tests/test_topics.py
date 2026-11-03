@@ -112,15 +112,46 @@ def test_a_topic_read_by_number_is_held_to_the_forums_list(ask):
     assert not ask.fake.called("get_messages")
 
 
-def test_a_topic_read_by_number_asks_the_forum_for_its_topics(ask):
+def test_a_topic_read_by_number_asks_for_that_topic(ask):
     answer = ask({"action": "read", "chat": CHAT, "topic": 17})
     assert answer["ok"] is True, answer
-    listed = [
+    named = [
         called
         for called in ask.fake.called("raw")
-        if called["request"] == "GetForumTopicsRequest"
+        if called["request"] == "GetForumTopicsByIDRequest" and "topics" in called
     ]
-    assert listed != []
+    assert named and named[0]["topics"] == [17], named
+
+
+# The list answers with a page, and a forum may hold more topics than a page carries: the
+# number names the topic itself, so the rest of the forum is read as surely as its first
+# page, and a message's own `topic` is how a caller learns a number the page never showed
+def test_a_topic_the_page_does_not_show_is_read_by_its_number(store):
+    ask = serve(
+        store,
+        topics=[FakeTopic(id=17, title="Work", unread_count=0, top_message=9)],
+        held_topics=[
+            FakeTopic(id=17, title="Work", unread_count=0, top_message=9),
+            FakeTopic(id=9001, title="Deep", unread_count=2, top_message=9600),
+        ],
+    )
+    answer = ask({"action": "read", "chat": CHAT, "topic": 9001})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("get_messages")[0]["reply_to"] == 9001
+
+
+def test_a_title_past_the_page_is_found_by_the_forums_own_search(store):
+    ask = serve(
+        store,
+        topics=[FakeTopic(id=17, title="Work", unread_count=0, top_message=9)],
+        held_topics=[
+            FakeTopic(id=17, title="Work", unread_count=0, top_message=9),
+            FakeTopic(id=9001, title="Deep", unread_count=2, top_message=9600),
+        ],
+    )
+    answer = ask({"action": "read", "chat": CHAT, "topic": "Deep"})
+    assert answer["ok"] is True, answer
+    assert ask.fake.called("get_messages")[0]["reply_to"] == 9001
 
 
 # General is the chat's own messages rather than a thread: no message starts it, so asking
@@ -140,17 +171,25 @@ def test_general_is_not_read_as_a_thread_by_its_title(ask):
     assert not ask.fake.called("get_messages")
 
 
-# A forum always keeps General, and a list may leave it out, so the position still has to
-# move there. A chat that keeps no topics still refuses, because the list says so
-def test_general_moves_the_chats_own_position_when_the_list_omits_it(store):
-    ask = serve(
-        store, topics=[FakeTopic(id=17, title="Work", unread_count=4, top_message=967)]
-    )
+# General is the chat's own position, and a forum answers for it like any other topic
+def test_general_moves_the_chats_own_position(ask):
     answer = ask({"action": "mark-read", "chat": CHAT, "topic": 1})
     assert answer["ok"] is True, answer
     assert answer["result"]["general"] is True
     assert ask.fake.called("send_read_acknowledge")
     assert not ask.fake.called("raw_topic_read")
+
+
+# A number is answered by the topic it names, so a chat that keeps no topics refuses even
+# when the number came from somewhere else
+def test_a_number_in_a_chat_that_is_no_forum_says_so(ask, monkeypatch):
+    async def not_a_forum(*args, **kwargs):
+        raise RuntimeError("ChannelForumMissingError:  (caused by GetForumTopicsByIDRequest)")
+
+    monkeypatch.setattr(client_module.Client, "topic", not_a_forum)
+    answer = ask({"action": "read", "chat": CHAT, "topic": 9001})
+    assert answer["ok"] is False
+    assert "keeps no topics" in answer["error"]
 
 
 def test_a_title_the_forum_lacks_is_refused_whole(ask):

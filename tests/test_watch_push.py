@@ -42,7 +42,7 @@ def serve(monkeypatch, history, pushed, ack=None):
     """Reads answer from `history`; a subscription acknowledges, then pushes `pushed`."""
     opened = []
 
-    def ask(socket, request):
+    def ask(socket, request, deadline=None):
         since = request.get("since")
         return {"ok": True, "result": [m for m in history if since is None or m["id"] > since]}
 
@@ -78,7 +78,7 @@ def test_the_subscription_opens_before_the_catch_up_read(monkeypatch):
     serve(monkeypatch, history=[], pushed=[])
     stream, ask = tg.stream, tg.ask
     monkeypatch.setattr(tg, "stream", lambda s, r: (order.append("subscribe"), stream(s, r))[1])
-    monkeypatch.setattr(tg, "ask", lambda s, r: (order.append("read"), ask(s, r))[1])
+    monkeypatch.setattr(tg, "ask", lambda s, r, deadline=None: (order.append("read"), ask(s, r))[1])
     watch.follow(Options(), since=20)
     assert order[:2] == ["subscribe", "read"]
 
