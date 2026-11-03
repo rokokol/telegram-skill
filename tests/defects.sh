@@ -613,6 +613,29 @@ SILENT
   'a request made while the link is down gets no answer at all, so the caller cannot tell a lost link from a request the service never read'
 
 # Selective read. A read names the message it stops at, and everything newer stays unread
+# The message a read stops at has to exist: the server clamps a bigger number to the newest
+# message, so a typo would clear the unread mark of everything
+defect 'mark-read/absent' 'tg_agentd/handler.py' \
+  '        held = await self._client.history(chat, ids=[stopped])' \
+  '        held = [stopped]' \
+  'a number past the newest message reaches Telegram as a limit and marks the whole chat read, so a typo clears the unread mark of messages nobody saw'
+
+defect 'mark-read/topic-foreign' 'tg_agentd/handler.py' \
+  '        if topic is not None and _thread_of(message) != topic:' \
+  '        if False:' \
+  'a topic read stops at a message of another topic, and the far side sees a conversation marked read that nobody opened'
+
+defect 'mark-read/folder-unchecked' 'tg_agentd/handler.py' \
+  "$(
+    cat <<'FOLDER'
+            for chat in members:
+                await self._read_to(chat, request)
+            stopped = _stop_number(request.get("id"))
+FOLDER
+  )" \
+  '            stopped = _stop_number(request.get("id"))' \
+  'a folder read marks every member past the message the agent read, in the members that never held the number as much as in the one that did'
+
 defect 'mark-read/chat-limit' 'tg_agentd/handler.py' \
   "$(
     cat <<'LIMIT'
@@ -673,14 +696,14 @@ defect 'mark-read/reply-limit' 'tg_agentd/handler.py' \
 defect 'mark-read/unchecked' 'tg_agentd/handler.py' \
   "$(
     cat <<'LIMIT'
-    if type(stopped) is not int or stopped <= 0:
-        raise BadMarkRead(f"{stopped!r} is not a message a read can stop at")
+    if type(given) is not int or given <= 0:
+        raise BadMarkRead(f"{given!r} is not a message a read can stop at")
 LIMIT
   )" \
   "$(
     cat <<'LIMIT'
     if False:
-        raise BadMarkRead(f"{stopped!r} is not a message a read can stop at")
+        raise BadMarkRead(f"{given!r} is not a message a read can stop at")
 LIMIT
   )" \
   'a number that names no message reaches Telegram as a limit, and a zero there marks the whole chat read'

@@ -23,7 +23,9 @@ def store(tmp_path):
 
 @pytest.fixture
 def fake():
-    return FakeClient(messages={777: [Message(id=1, text="hi", sender_id=42)]})
+    return FakeClient(
+        messages={777: [Message(id=1, text="hi", sender_id=42), Message(id=12, text="later", sender_id=42)]}
+    )
 
 
 @pytest.fixture

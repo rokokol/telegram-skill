@@ -3,6 +3,7 @@
 import asyncio
 
 import pytest
+from telethon.tl import types as t
 
 from tests.fake_telethon import FakeClient, FakeTopic, Message
 from tg_agentd import client as client_module
@@ -27,8 +28,16 @@ def store(tmp_path):
 
 def serve(store, **fake):
     """A handler over a stand-in holding one forum, and the calls it made."""
+    in_work = t.MessageReplyHeader(reply_to_msg_id=17, forum_topic=True)
     fake = FakeClient(
-        messages={CHAT: [Message(id=1, text="in a topic", sender_id=9)]}, **fake
+        messages={
+            CHAT: [
+                Message(id=1, text="in a topic", sender_id=9),
+                Message(id=900, text="in Work", sender_id=9, reply_to=in_work),
+                Message(id=950, text="among the chat's own", sender_id=9),
+            ]
+        },
+        **fake,
     )
     served = handler.Handler(store, client_module.Client(fake))
 
@@ -248,12 +257,30 @@ def test_the_general_topic_moves_the_chats_own_read_position(ask):
 
 # General moves the chat's own read position, which can stop at a message too
 def test_the_general_topic_can_stop_at_one_message(ask):
-    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 1, "id": 900})
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 1, "id": 950})
     assert answer["ok"] is True, answer
     assert ask.fake.called("send_read_acknowledge") == [
-        {"entity": CHAT, "message": None, "max_id": 900}
+        {"entity": CHAT, "message": None, "max_id": 950}
     ]
-    assert answer["result"]["read_max_id"] == 900
+    assert answer["result"]["read_max_id"] == 950
+
+
+# A number past the newest message would be clamped by the server to the newest one, so
+# the whole chat would read as seen though the agent saw nothing of it
+def test_a_read_past_the_newest_message_is_refused(ask):
+    answer = ask({"action": "mark-read", "chat": CHAT, "id": 999999})
+    assert answer["ok"] is False
+    assert "is not one chat" in answer["error"]
+    assert not ask.fake.called("send_read_acknowledge")
+    assert not ask.fake.called("raw_topic_read")
+
+
+# A topic read stops at a message of that topic, not at one of another thread
+def test_a_topic_read_refuses_a_message_of_another_topic(ask):
+    answer = ask({"action": "mark-read", "chat": CHAT, "topic": 17, "id": 950})
+    assert answer["ok"] is False
+    assert "in no topic 17" in answer["error"]
+    assert not ask.fake.called("raw_topic_read")
 
 
 def test_marking_a_topic_read_needs_mark_read(ask, store):

@@ -244,6 +244,31 @@ class Handler:
                 request = {**request, key: await self._client.own_id()}
         return request
 
+    async def _read_to(self, chat, request, key="id", topic=None):
+        """The message a read stops at, which the chat has to hold.
+
+        Telegram takes the number as a limit on the receipt, so a number past the newest
+        message marks everything read rather than less, and one the chat never held would
+        clear the unread mark of messages nobody saw. The message is asked for before
+        anything is marked, under the grant that is about to use it, and a topic read
+        also refuses one that sits in another topic
+        """
+        stopped = _stop_number(request.get(key))
+        if stopped is None:
+            return None
+        held = await self._client.history(chat, ids=[stopped])
+        message = held[0] if held else None
+        if message is None:
+            raise BadMarkRead(
+                f"message {stopped} is not one chat {chat} holds, so a read cannot stop at it"
+            )
+        if topic is not None and _thread_of(message) != topic:
+            raise BadMarkRead(
+                f"message {stopped} is in no topic {topic}, so a read of that topic "
+                "cannot stop at it"
+            )
+        return stopped
+
     async def _grant(self, chat, needs):
         """Who allows this chat the word it needs: (None, by, through), or (refusal, ...)."""
         decision = self._store.chat_may(chat, needs)
@@ -368,11 +393,12 @@ class Handler:
                 raise BadMarkup(
                     "rich markup cannot caption a file; send the text as its own message"
                 )
-            # The read that follows a reply stops at the message answered, so a number
-            # that names no message is refused before the reply goes out, not after
+            # The read that follows a reply stops at the message answered. That message
+            # is the one the send names, and Telegram refuses to answer one that is not
+            # there, so the receipt can never name it and no check of its own is needed
             read_to = None
             if action == "reply" and self._store.chat_flag(chat, "mark-read-on-reply"):
-                read_to = _read_to(request, "reply_to")
+                read_to = _stop_number(request.get("reply_to"))
             # A file is a message too, so it takes the grant that sends words. Its bytes
             # arrive in the request because the service never opens a path on a caller's
             # behalf: a path would reach whatever this process can read, its session
@@ -418,7 +444,7 @@ class Handler:
         if action == "mark-read":
             if request.get("topic") is not None:
                 return await self._mark_topic(chat, request)
-            stopped = _read_to(request)
+            stopped = await self._read_to(chat, request)
             await self._client.mark_read(chat, stopped)
             if stopped is None:
                 return None
@@ -517,7 +543,12 @@ class Handler:
         if action == "read":
             return {"members": members}
         if action == "mark-read":
-            stopped = _read_to(request)
+            # Every member is checked before any of them is marked: one that does not hold
+            # the message stops the whole request, as an unreachable message does for a
+            # single chat, and nothing is left half marked
+            for chat in members:
+                await self._read_to(chat, request)
+            stopped = _stop_number(request.get("id"))
             for chat in members:
                 await self._client.mark_read(chat, stopped)
             marked = {"marked": members}
@@ -728,7 +759,9 @@ class Handler:
         topic = await self._topic(chat, request["topic"])
         identifier = getattr(topic, "id", None)
         title = folders.title_of(topic)
-        stopped = _read_to(request)
+        stopped = await self._read_to(
+            chat, request, topic=None if identifier == GENERAL_TOPIC else identifier
+        )
         if identifier == GENERAL_TOPIC:
             await self._client.mark_read(chat, stopped)
             answer = {
@@ -755,19 +788,18 @@ class Handler:
         }
 
 
-def _read_to(request, key="id"):
-    """The message a read stops at, when the request names one.
+def _stop_number(given):
+    """The number a read stops at, or None when the request names none.
 
-    Telegram treats the number as a limit on the receipt, so a read to message N leaves
-    everything newer unread while a number that names no message would be read as one
-    reaching the whole chat. Such a number is refused rather than passed on.
+    A number that is not a positive integer names no message at all, so it is refused
+    here; whether the chat holds the one it does name is asked separately, and only where
+    nothing else answers that question first
     """
-    stopped = request.get(key)
-    if stopped is None:
+    if given is None:
         return None
-    if type(stopped) is not int or stopped <= 0:
-        raise BadMarkRead(f"{stopped!r} is not a message a read can stop at")
-    return stopped
+    if type(given) is not int or given <= 0:
+        raise BadMarkRead(f"{given!r} is not a message a read can stop at")
+    return given
 
 
 def _upload(attached):

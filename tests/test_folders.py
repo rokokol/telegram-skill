@@ -26,8 +26,8 @@ def ask(store, monkeypatch):
     monkeypatch.setattr(client_module, "UpdateStatusRequest", _FakeStatusRequest)
     fake = FakeClient(
         messages={
-            777: [Message(id=1, text="unread one", sender_id=42)],
-            888: [Message(id=2, text="unread two", sender_id=43)],
+            777: [Message(id=1, text="unread one", sender_id=42), Message(id=12, text="later", sender_id=42)],
+            888: [Message(id=2, text="unread two", sender_id=43), Message(id=12, text="later", sender_id=43)],
         },
         dialogs=[
             Dialog(id=777, name="study one", unread_count=1),
@@ -88,6 +88,18 @@ def test_mark_read_reaches_only_folder_members(ask, store, words):
     assert ask.fake.called("send_read_acknowledge") == [
         {"entity": chat, "message": None, "max_id": None} for chat in [123, 777, 888]
     ]
+
+
+# One identifier names a different message in every member, so a member that does not
+# hold it refuses the whole folder: marking the others would clear history nobody read
+def test_a_folder_read_the_number_of_no_member_marks_none_of_them(ask, store, monkeypatch):
+    grant_folder(store, 5, "mark-read")
+    held = ask.fake.messages
+    held[777] = [message for message in held[777] if message.id != 12]
+    answer = ask({"action": "mark-read", "folder": 5, "id": 12})
+    assert answer["ok"] is False
+    assert "777" in answer["error"]
+    assert not ask.fake.called("send_read_acknowledge")
 
 
 def test_marking_a_folder_read_can_stop_at_one_message(ask, store):
